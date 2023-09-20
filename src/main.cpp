@@ -16,11 +16,14 @@ bool lastOpenDoor = true;
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
 wl_status_t beginWiFi = WL_NO_SHIELD;
-EventGroupHandle_t s_wifi_event_group;
 
 WebServer httpServer(80);
 
 TaskHandle_t networkTask;
+
+std::mutex mutex;
+EventGroupHandle_t wifi_event;
+std::condition_variable condition;
 
 struct DoorState{
     bool open;
@@ -32,7 +35,6 @@ void sendNetworkLoop(void* args);
 
 void changeWiFiMode(bool isApSta){
     //Serial.printf("Change WiFi Mode: %s\n", isApSta ? "AP" : "Station");
-
     if(isApSta){
         WiFi.mode(WIFI_AP_STA);
         WiFi.softAP("Checker");
@@ -82,7 +84,6 @@ void savePage(){
 
 void setup(){
     Storage.begin();
-    xEventGroupClearBits(s_wifi_event_group, BIT0);
 
     /*Serial.begin(115200);
     while(!Serial){
@@ -92,9 +93,7 @@ void setup(){
     httpServer.on("/", indexPage);
     httpServer.on("/save", savePage);
 
-    pinMode(LED_BUILTIN, OUTPUT);
     pinMode(SWITCH, INPUT_PULLUP);
-    digitalWrite(LED_BUILTIN, LOW);
     lastOpenDoor = digitalRead(SWITCH) == LOW;
     if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0){
         DoorState state = {
@@ -120,28 +119,44 @@ void setup(){
 
 esp_err_t wifi_handler(void *ctx, system_event_t *event){
     switch(event->event_id){
-        case SYSTEM_EVENT_STA_GOT_IP:
-            xEventGroupSetBits(s_wifi_event_group, BIT0);
+        case SYSTEM_EVENT_STA_GOT_IP:{
+		    std::lock_guard<std::mutex> lock(mutex);
+            xEventGroupSetBits(wifi_event, BIT0);
+            condition.notify_one();
+
+            Serial.println("WiFi 연결됨");
             break;
-        case SYSTEM_EVENT_STA_DISCONNECTED:
-            xEventGroupClearBits(s_wifi_event_group, BIT0);
-            break;		
+        }
+        case SYSTEM_EVENT_STA_DISCONNECTED:{
+		    std::lock_guard<std::mutex> lock(mutex);
+            xEventGroupClearBits(wifi_event, BIT0);
+            condition.notify_one();
+
+            Serial.println("WiFi 끊어짐");
+            break;	
+        }	
     }
     return ESP_OK;
 }
 
 void sendNetworkLoop(void* args){
+    wifi_event = xEventGroupCreate();
     esp_event_loop_init(wifi_handler, NULL);
     for(;;){
-        DynamicJsonDocument json(2048);
+		std::unique_lock<std::mutex> lock(mutex);
+        while(!(xEventGroupGetBits(wifi_event) & BIT0)){
+            Serial.println("WiFi 연결 대기중");
+			condition.wait(lock);
+        }
+
+        DynamicJsonDocument json(4096);
         json["id"] = Storage.getDeviceId();
         JsonArray array = json.createNestedArray("data");
-
         do{
             auto data = doorStateQueue.pop();
-            JsonObject object = array.createNestedObject();
-            object["open"] = data.open;
-            object["time"] = data.updateTime;
+            auto object = array.createNestedArray();
+            object.add(data.open ? 1 : 0);
+            object.add(data.updateTime);
         }while(!doorStateQueue.empty());
         
         HTTPClient http;
@@ -195,7 +210,7 @@ void loop(){
         changeWiFiMode(false);
     }
 
-    if(esp_timer_get_time() - lastUpdateTime > 15 * 1000000){ // 업데이트가 발생한지 15초가 지난 경우
+    if(esp_timer_get_time() - lastUpdateTime > 10 * 1000000){ // 업데이트가 발생한지 15초가 지난 경우
         //Serial.println("deep sleep start");
 
         rtc_gpio_pullup_en(SWITCH);
