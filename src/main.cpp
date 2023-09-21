@@ -1,29 +1,40 @@
-#include <WiFi.h>
-#include <WiFiUdp.h>
-#include <WebServer.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
+/* WiFi station Example
+
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
+
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
+#include <nvs.h>
+#include <string.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include <esp_wifi.h>
+#include <esp_timer.h>
+#include <esp_log.h>
+#include <nvs_flash.h>
+#include <esp_sleep.h>
+#include <driver/gpio.h>
 #include <driver/rtc_io.h>
+#include <ArduinoJson.h>
+#include <string>
+#include <esp_http_client.h>
 
 #include "web.h"
-#include "sleep.h"
 #include "queue.h"
 #include "storage.h"
 
-#define SWITCH GPIO_NUM_25
+using namespace std;
 
-bool lastOpenDoor = true;
+bool connectWifi = false;
+bool lastOpenDoor = false;
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
-wl_status_t beginWiFi = WL_NO_SHIELD;
-
-WebServer httpServer(80);
 
 TaskHandle_t networkTask;
-
-std::mutex mutex;
-EventGroupHandle_t wifi_event;
-std::condition_variable condition;
+TaskHandle_t doorTask;
 
 struct DoorState{
     bool open;
@@ -31,190 +42,161 @@ struct DoorState{
 };
 SafeQueue<DoorState> doorStateQueue;
 
-void sendNetworkLoop(void* args);
-
-void changeWiFiMode(bool isApSta){
-    //Serial.printf("Change WiFi Mode: %s\n", isApSta ? "AP" : "Station");
-    if(isApSta){
-        WiFi.mode(WIFI_AP_STA);
-        WiFi.softAP("Checker");
-    }else{
-        auto ssid = Storage.getWiFiSSID();
-        if(ssid.length() < 1){
-            changeWiFiMode(true);
-            return;
+static void wifiHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
+    printf("[WiFi] Code: %ld\n", event_id);
+    if(event_id == WIFI_EVENT_STA_START || event_id == WIFI_EVENT_STA_DISCONNECTED){
+        esp_wifi_connect();
+        connectWifi = false;
+    }/*else if(event_id == WIFI_EVENT_STA_DISCONNECTED){
+        if(s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY){
+            ++s_retry_num;
+            esp_wifi_connect();
+            ESP_LOGI(TAG, "와이파이에 다시 연결합니다.");
+        }else{
+            ESP_LOGI(TAG, "와이파이 연결에 실패했습니다.");
+            xEventGroupSetBits(wifi_status, WIFI_FAIL_BIT);
         }
-
-        auto password = Storage.getWiFiPassword();
-        if(password.length() < 1){
-            changeWiFiMode(true);
-            return;
-        }
-
-        wifiTryConnectTime = -1;
-        WiFi.mode(WIFI_STA);
-        if(beginWiFi == WL_NO_SHIELD){
-            beginWiFi = WiFi.begin(ssid, password);
-        }
-    }
-}
-
-void indexPage(){
-    char* html = (char*) String(indexHtml).c_str();
-    bool listMode = false;
-    if(listMode){ //
-        //String ssidList = "<select name='ssid' style='width: 100%'><option>fold2</option><option>2F_WiFi_2GHz</option><option>RM404</option>";
-        String ssidList = "<select name='ssid' style='width: 100%'>";
-        auto length = WiFi.scanNetworks();
-        for(uint8_t i = 0; i < length; ++i){
-            ssidList += "<option>" + WiFi.SSID(i) + "</option>";
-        }
-        httpServer.send(200, "text/html", getIndexPageListSSID(ssidList + "</select>", length == 0));
-    }else{
-        httpServer.send(200, "text/html", getIndexPageInputSSID());
-    }
-}
-
-void savePage(){
-    httpServer.send(200, "text/html", getSavePage());
-    Storage.setWiFiData(httpServer.arg("ssid"), httpServer.arg("password"));
-    beginWiFi = WL_NO_SHIELD;
-    changeWiFiMode(false);
-}
-
-void setup(){
-    Storage.begin();
-
-    /*Serial.begin(115200);
-    while(!Serial){
-        delay(10);
     }*/
-
-    httpServer.on("/", indexPage);
-    httpServer.on("/save", savePage);
-
-    pinMode(SWITCH, INPUT_PULLUP);
-    lastOpenDoor = digitalRead(SWITCH) == LOW;
-    if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0){
-        DoorState state = {
-            .open = lastOpenDoor,
-            .updateTime = 0,
-        };
-        doorStateQueue.push(state);
-    }
-
-    changeWiFiMode(false);
-    httpServer.begin();
-
-    xTaskCreatePinnedToCore(
-        sendNetworkLoop,
-        "network",
-        10000,
-        NULL,
-        1,
-        &networkTask,
-        0
-    );
 }
 
-esp_err_t wifi_handler(void *ctx, system_event_t *event){
-    switch(event->event_id){
-        case SYSTEM_EVENT_STA_GOT_IP:{
-		    std::lock_guard<std::mutex> lock(mutex);
-            xEventGroupSetBits(wifi_event, BIT0);
-            condition.notify_one();
+static void ipHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
+    connectWifi = true;
+    ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+    printf("[WiFi] 아이피: " IPSTR "\n", IP2STR(&event->ip_info.ip));
+}
 
-            Serial.println("WiFi 연결됨");
-            break;
+void initWiFi(){
+    ESP_ERROR_CHECK(esp_netif_init());
+
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_ap();
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ipHandler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiHandler, NULL));
+
+    /*wifi_config_t staConfig = {
+        .sta = {
+            .ssid = "",
+            .password = "",
+        },
+    };
+    strcpy((char*) staConfig.sta.ssid, ssid.c_str());
+    strcpy((char*) staConfig.sta.password, password.c_str());
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &staConfig));*/
+
+    wifi_config_t apConfig = {
+        .ap = {
+            .ssid = "Checker",
+            .password = "",
+            .ssid_len = strlen("Checker"),
+            .authmode = WIFI_AUTH_OPEN,
+            .max_connection = 1,
         }
-        case SYSTEM_EVENT_STA_DISCONNECTED:{
-		    std::lock_guard<std::mutex> lock(mutex);
-            xEventGroupClearBits(wifi_event, BIT0);
-            condition.notify_one();
+    };
+    esp_wifi_set_config(WIFI_IF_AP, &apConfig);
 
-            Serial.println("WiFi 끊어짐");
-            break;	
-        }	
-    }
-    return ESP_OK;
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-void sendNetworkLoop(void* args){
-    wifi_event = xEventGroupCreate();
-    esp_event_loop_init(wifi_handler, NULL);
+void networkLoop(void* args){
+    esp_err_t err = nvs_flash_init();
+    if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND){
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+
+    initWiFi();
+    httpd_handle_t server = NULL;
     for(;;){
-		std::unique_lock<std::mutex> lock(mutex);
-        while(!(xEventGroupGetBits(wifi_event) & BIT0)){
-            Serial.println("WiFi 연결 대기중");
-			condition.wait(lock);
+        if(!connectWifi){
+            wifi_mode_t mode;
+            esp_wifi_get_mode(&mode);
+            if(mode == WIFI_MODE_APSTA){
+                if(!server){
+                    ESP_ERROR_CHECK(startWebServer(&server));
+                }
+            }else{
+                auto now = esp_timer_get_time();
+                if(wifiTryConnectTime == 0){
+                    wifiTryConnectTime = now;
+                }
+                if(now - wifiTryConnectTime >= 10 * 1000000){
+                    esp_wifi_set_mode(WIFI_MODE_APSTA);
+                }
+            }
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+            continue;
         }
 
-        DynamicJsonDocument json(4096);
+        DynamicJsonDocument json(2048);
         json["id"] = Storage.getDeviceId();
-        JsonArray array = json.createNestedArray("data");
+        JsonArray dataArray = json.createNestedArray("data");
+
         do{
             auto data = doorStateQueue.pop();
-            auto object = array.createNestedArray();
-            object.add(data.open ? 1 : 0);
-            object.add(data.updateTime);
+            auto array = dataArray.createNestedArray();
+            array.add(data.open ? 1 : 0);
+            array.add(data.updateTime);
         }while(!doorStateQueue.empty());
         
-        HTTPClient http;
-        http.begin("http://leinne.net:33877/req_door");
-        http.addHeader("Content-Type", "application/json");
+        esp_http_client_config_t config = {.url = "http://leinne.net:33877/req_door"};
+        auto client = esp_http_client_init(&config);
+        esp_http_client_set_method(client, HTTP_METHOD_POST);
+        esp_http_client_set_header(client, "Content-Type", "application/json");
 
+        string body;
         json["current"] = esp_timer_get_time() / 1000LL;
-        
-        String body;
         serializeJson(json, body);
-        while(http.POST(body) != HTTP_CODE_OK){
-            delay(100);
+        //printf("%s\n", body.c_str());
+        esp_http_client_set_post_field(client, body.c_str(), body.length());
+        esp_http_client_perform(client);
+        esp_http_client_cleanup(client);
 
-            body = "";
-            json["current"] = esp_timer_get_time() / 1000LL;
-            serializeJson(json, body);
+        wifi_mode_t mode;
+        esp_wifi_get_mode(&mode);
+        if(mode == WIFI_MODE_APSTA){
+            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+            stopWebServer(&server);
         }
     }
 }
 
-void loop(){
-    bool openDoor = digitalRead(SWITCH) == LOW;
-    if(lastOpenDoor != openDoor){
-        DoorState state = {
-            .open = openDoor,
-            .updateTime = esp_timer_get_time() / 1000LL,
-        };
-        doorStateQueue.push(state);
-        //Serial.printf(openDoor ? "[%d] 문 열림\n" : "[%d] 문 닫힘\n", state.updateTime);
+void checkDoor(void* args){
+    for(;;){
+        bool openDoor = !gpio_get_level(GPIO_NUM_25);
+        if(lastOpenDoor != openDoor){
+            DoorState state = {
+                .open = openDoor,
+                .updateTime = esp_timer_get_time() / 1000LL,
+            };
+            doorStateQueue.push(state);
+            //printf(openDoor ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
 
-        lastOpenDoor = state.open;
-        lastUpdateTime = esp_timer_get_time();
-    }
-
-    if(WiFi.status() != WL_CONNECTED){
-        if(WiFi.getMode() == WIFI_AP_STA){
-            httpServer.handleClient();
-        }else{
-            auto now = millis();
-            if(wifiTryConnectTime == 0){
-                wifiTryConnectTime = now;
-            }
-            if(now - wifiTryConnectTime >= 10 * 1000){
-                changeWiFiMode(true);
-            }
+            lastOpenDoor = openDoor;
+            lastUpdateTime = esp_timer_get_time();
         }
-        return;
-    }
 
-    if(WiFi.getMode() == WIFI_AP_STA){
-        changeWiFiMode(false);
-    }
+        if(esp_timer_get_time() - lastUpdateTime > 8 * 1000000){ // 업데이트가 발생한지 8초가 지난 경우
+            printf("[SLEEP] Start Deep Sleep\n");
 
-    if(esp_timer_get_time() - lastUpdateTime > 10 * 1000000){ // 업데이트가 발생한지 15초가 지난 경우
-        //Serial.println("deep sleep start");
-
-        rtc_gpio_pullup_en(SWITCH);
-        esp_sleep_enable_ext0_wakeup(SWITCH, !digitalRead(SWITCH));
-        esp_deep_sleep_start();
+            rtc_gpio_pullup_en(GPIO_NUM_25);
+            esp_sleep_enable_ext0_wakeup(GPIO_NUM_25, openDoor);
+            esp_deep_sleep_start();
+        }
+        vTaskDelay(20 / portTICK_PERIOD_MS);
     }
+}
+
+extern "C" void app_main(){
+    gpio_set_direction(GPIO_NUM_25, GPIO_MODE_INPUT);
+    gpio_pullup_en(GPIO_NUM_25);
+
+    esp_log_level_set("*", ESP_LOG_NONE);
+    xTaskCreatePinnedToCore(checkDoor, "door", 10000, NULL, 1, &doorTask, 0);
+    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 1);
 }

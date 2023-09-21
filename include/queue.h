@@ -3,7 +3,7 @@
 #include <utility>
 #include <condition_variable>
 
-template<class T>
+/*template<class T>
 class SafeQueueNew{
 private:
 	std::queue<T> q;
@@ -92,15 +92,16 @@ public:
 		});
 		finish_processing = false;
 	}
-};
-
-#include <queue>
-#include <mutex>
-#include <condition_variable>
+};*/
 
 // A threadsafe-queue.
 template <class T>
 class SafeQueue{
+private:
+	std::queue<T> q;
+	mutable std::mutex m;
+	std::condition_variable c;
+    
 public:
 	SafeQueue(): q(), m(), c(){}
 	~SafeQueue(){}
@@ -125,9 +126,4 @@ public:
 		q.pop();
 		return val;
 	}
-
-private:
-	std::queue<T> q;
-	mutable std::mutex m;
-	std::condition_variable c;
 };

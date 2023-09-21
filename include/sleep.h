@@ -1,22 +1,15 @@
 #include <esp_sleep.h>
-#include <esp32-hal-log.h>
 
-void lightSleep(uint64_t us){
-    if(esp_sleep_enable_timer_wakeup(us) != ESP_OK){
-        log_e("Invalid sleep time. [value: %d]", us);
-        return;
+void lightSleep(int64_t us = -1){
+    if(us > 0 && esp_sleep_enable_timer_wakeup(us) != ESP_OK){
+        printf("Invalid sleep time. [value: %d]\n", us);
     }
     esp_light_sleep_start();
 }
 
-void deepSleep(){
-    esp_deep_sleep_start();
-}
-
-void deepSleep(uint64_t us){
-    if(esp_sleep_enable_timer_wakeup(us) != ESP_OK){
-        log_e("Invalid sleep time. [value: %d]", us);
-        return;
+void deepSleep(int64_t us = -1){
+    if(us > 0 && esp_sleep_enable_timer_wakeup(us) != ESP_OK){
+        printf("Invalid sleep time. [value: %d]\n", us);
     }
     esp_deep_sleep_start();
 }
