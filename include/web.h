@@ -1,5 +1,10 @@
 #include <string>
+#include <utility>
+#include <sstream>
+#include <esp_wifi.h>
 #include <esp_http_server.h>
+
+#include "log.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
@@ -46,7 +51,7 @@ R"rawliteral(
                 <td><input type="password" required minlength="8" maxlength="100" name="password"></td>
             </tr>
             <tr>
-                <td colspan='2'><center><input style="width: 50%; font-weight: bold" type="submit" value="Save Data" ${disabled}></center></td>
+                <td colspan='2'><center><input style="width: 50%; font-weight: bold" type="submit" value="Save Data"></center></td>
             </tr>
         </table>
     </form>
@@ -55,7 +60,7 @@ R"rawliteral(
 )rawliteral";
 
 const char* saveHtml =
-R"(
+R"rawliteral(
 <!DOCTYPE HTML>
 <html>
 <head>
@@ -71,43 +76,77 @@ R"(
     </center>
 </body>
 </html>
-)";
+)rawliteral";
 
-/*unordered_map<string, string> parseParameter(char* data){
-    unordered_map<string, string> result;
+string url_decode(const string& encoded){
+    ostringstream decoded;
+    for(size_t i = 0; i < encoded.length(); ++i){
+        if(encoded[i] == '%'){
+            if(i + 2 < encoded.length()){
+                char hexStr[3] = {encoded[i + 1], encoded[i + 2], '\0'};
+                int decoded_char;
+                istringstream(hexStr) >> hex >> decoded_char;
+                decoded << static_cast<char>(decoded_char);
+                i += 2;
+            }else{
+                return "";
+            }
+        }else if(encoded[i] == '+'){
+            decoded << ' ';
+        }else{
+            decoded << encoded[i];
+        }
+    }
+    return decoded.str();
+}
+
+pair<string, string> parseParameter(char* data){
+    pair<string, string> result = make_pair("", "");
     istringstream iss(data);
     string token;
     while(getline(iss, token, '&')){
         size_t equalPos = token.find('=');
         if(equalPos != string::npos){
-            result[token.substr(0, equalPos)] = token.substr(equalPos + 1);
+            auto key = token.substr(0, equalPos);
+            if(key == "ssid"){
+                result.first = url_decode(token.substr(equalPos + 1));
+            }
+            if(key == "password"){
+                result.second = url_decode(token.substr(equalPos + 1));
+            }
         }
     }
     return result;
-}*/
-
-string getIndexPageInputSSID(){
-    string index = indexHtml;
-    index.replace(index.find("${ssid}"), 7, "<input type='text' required maxlength='100' name='ssid'>");
-    index.replace(index.find("${disabled}"), 11, "");
-    return index;
-}
-   
-string getIndexPageListSSID(string ssidList, bool disabled){
-    string index = indexHtml;
-    index.replace(index.find("${ssid}"), 7, ssidList);
-    index.replace(index.find("${disabled}"), 11, disabled ? "disabled" : "");
-    return index;
 }
 
-string getSavePage(){
-    string save = saveHtml;
-    return save;
+string getIndexPage(bool scan){
+    string index = indexHtml;
+
+    uint16_t length = 0;
+    wifi_ap_record_t apInfo[32];
+    if(scan){
+        esp_wifi_scan_start(NULL, true);
+        esp_wifi_scan_get_ap_num(&length);
+        length = MIN(length, 32);
+
+        esp_wifi_scan_get_ap_records(&length, apInfo);
+        esp_wifi_scan_stop();
+    }
+
+    if(length > 0){
+        string ssidInput = "<select name='ssid' style='width: 100%'>";
+        for(uint16_t i = 0; i < length; i++){
+            ssidInput += "<option>" + string((char*) apInfo[i].ssid) + "</option>";
+        }
+        index.replace(index.find("${ssid}"), 7, ssidInput + "</select>");
+    }else{
+        index.replace(index.find("${ssid}"), 7, "<input type='text' required maxlength='100' name='ssid'>");
+    }
+    return index;
 }
 
 esp_err_t indexPage(httpd_req_t* req){
-    httpd_resp_send(req, getIndexPageInputSSID().c_str(), HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+    return httpd_resp_send(req, getIndexPage(true).c_str(), HTTPD_RESP_USE_STRLEN);
 }
 
 esp_err_t savePage(httpd_req_t* req){
@@ -115,15 +154,18 @@ esp_err_t savePage(httpd_req_t* req){
 
     char content[req->content_len + 1] = {0};
     int ret = httpd_req_recv(req, content, req->content_len);
-    
-    if(req->content_len > 0){
-        //auto data = parseParameter(content);
-        printf("[Web]: %s\n", content);
-    }
-
-    if(ret <= 0){
+    if(ret > 0){
+        auto data = parseParameter(content);
+        if(data.first.length() > 0 && data.second.length() > 7){
+            wifi_config_t staConfig = {0};
+            strcpy((char*) staConfig.sta.ssid, data.first.c_str());
+            strcpy((char*) staConfig.sta.password, data.second.c_str());
+            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &staConfig));
+            esp_wifi_connect();
+        }
+    }else{
         if(ret == HTTPD_SOCK_ERR_TIMEOUT){
-            httpd_resp_send_408(req);
+            httpd_resp_send_err(req, HTTPD_408_REQ_TIMEOUT, NULL);
         }
         return ESP_FAIL;
     }
@@ -131,7 +173,7 @@ esp_err_t savePage(httpd_req_t* req){
 }
 
 esp_err_t startWebServer(httpd_handle_t* server){
-    printf("[Web] Start Server\n");
+    debugPrint("[Web] Start Server\n");
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     esp_err_t err = httpd_start(server, &config);
     if(err == ESP_OK){
@@ -141,7 +183,7 @@ esp_err_t startWebServer(httpd_handle_t* server){
             .handler = indexPage,
             .user_ctx = NULL
         };
-        httpd_register_uri_handler(server, &index);
+        httpd_register_uri_handler(*server, &index);
 
         httpd_uri_t saveUri = {
             .uri = "/save",
@@ -149,15 +191,14 @@ esp_err_t startWebServer(httpd_handle_t* server){
             .handler = savePage,
             .user_ctx = NULL
         };
-        httpd_register_uri_handler(server, &saveUri);
+        httpd_register_uri_handler(*server, &saveUri);
     }
     return err;
 }
 
-void stopWebServer(httpd_handle_t* server){
-    printf("[Web] Stop Server\n");
-    if(*server != NULL){
-        httpd_stop(*server);
-        *server = NULL;
-    }
+esp_err_t stopWebServer(httpd_handle_t* server){
+    debugPrint("[Web] Stop Server\n");
+    esp_err_t err = httpd_stop(*server);
+    *server = NULL;
+    return err;
 }

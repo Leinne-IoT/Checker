@@ -15,10 +15,20 @@ void deepSleep(int64_t us = -1){
 }
 
 void hibernate(){
+    #ifdef ESP_PD_DOMAIN_XTAL
     esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
+    #endif
     
+    #ifdef ESP_PD_DOMAIN_RTC_PERIPH
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
+    #endif
+
+    #ifdef ESP_PD_DOMAIN_RTC_SLOW_MEM
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
+    #endif
+
+    #ifdef ESP_PD_DOMAIN_RTC_FAST_MEM
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
+    #endif
     deepSleep();
 }

@@ -9,9 +9,9 @@ private:
 
 public:
     bool begin(string name = "storage");
-    string getDeviceId();
-    string getString(string key);
-    bool setString(string key, string value);
-};
 
-extern StorageClass Storage;
+    string getString(string key);
+    string getString(string key, size_t length);
+
+    bool setString(string key, string value, bool saveLength = true);
+};

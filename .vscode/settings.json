@@ -1,5 +1,10 @@
 {
     "files.associations": {
-        "tuple": "cpp"
+        "tuple": "cpp",
+        "*.tcc": "cpp",
+        "iosfwd": "cpp",
+        "string_view": "cpp",
+        "atomic": "cpp",
+        "cmath": "cpp"
     }
 }
