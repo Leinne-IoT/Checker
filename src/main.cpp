@@ -1,5 +1,3 @@
-#define DEBUG_MODE
-
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <nvs.h>
@@ -17,17 +15,19 @@
 #include <esp_http_client.h>
 #include <atomic>
 
-#include "log.h"
-#include "web.h"
-#include "utils.h"
-#include "storage.h"
-#include "safe_queue.h"
-
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define SWITCH_PIN GPIO_NUM_25
 #else
 #define SWITCH_PIN GPIO_NUM_7
 #endif
+
+#define DEBUG_MODE
+
+#include "log.h"
+#include "web.h"
+#include "utils.h"
+#include "storage.h"
+#include "safe_queue.h"
 
 using namespace std;
 
@@ -71,7 +71,7 @@ string getDeviceId(StorageClass storage){
 }
 
 static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-    debugPrint("[WiFi] Code: %ld", id);
+    debugPrint("[WiFi] Code: %ld\n", id);
     switch(id){
         case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -191,7 +191,7 @@ void checkDoor(void* args){
                 .open = openDoor,
                 .updateTime = esp_timer_get_time() / 1000LL,
             });
-            debugPrint(openDoor ? "문 열림" : "문 닫힘");
+            debugPrint(openDoor ? "문 열림\n" : "문 닫힘\n");
 
             lastOpenDoor = openDoor;
             lastUpdateTime = esp_timer_get_time();
