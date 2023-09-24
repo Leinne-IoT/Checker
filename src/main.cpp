@@ -1,10 +1,4 @@
-#ifdef CONFIG_IDF_TARGET_ESP32
-#define SWITCH_PIN GPIO_NUM_25
-#else
-#define SWITCH_PIN GPIO_NUM_7
-#endif
-
-//#define DEBUG_MODE
+#define DEBUG_MODE
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -28,6 +22,12 @@
 #include "utils.h"
 #include "storage.h"
 #include "safe_queue.h"
+
+#ifdef CONFIG_IDF_TARGET_ESP32
+#define SWITCH_PIN GPIO_NUM_25
+#else
+#define SWITCH_PIN GPIO_NUM_7
+#endif
 
 using namespace std;
 
