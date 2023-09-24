@@ -72,7 +72,23 @@ R"rawliteral(
     <center>
         <h1>Checker WiFi Settings</h1>
         <div>Checker WiFi AP settings have been successful.</div>
-        <div>You will be able to play the game soon.</div>
+    </center>
+</body>
+</html>
+)rawliteral";
+
+const char* saveHtmlError =
+R"rawliteral(
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Checker WiFi Settings</title>
+</head>
+<body>
+    <center>
+        <h1>FAILED</h1>
     </center>
 </body>
 </html>
@@ -83,8 +99,8 @@ string url_decode(const string& encoded){
     for(size_t i = 0; i < encoded.length(); ++i){
         if(encoded[i] == '%'){
             if(i + 2 < encoded.length()){
-                char hexStr[3] = {encoded[i + 1], encoded[i + 2], '\0'};
                 int decoded_char;
+                char hexStr[3] = {encoded[i + 1], encoded[i + 2], '\0'};
                 istringstream(hexStr) >> hex >> decoded_char;
                 decoded << static_cast<char>(decoded_char);
                 i += 2;
@@ -101,19 +117,20 @@ string url_decode(const string& encoded){
 }
 
 pair<string, string> parseParameter(char* data){
-    pair<string, string> result = make_pair("", "");
-    istringstream iss(data);
     string token;
+    istringstream iss(data);
+    pair<string, string> result = make_pair("", "");
     while(getline(iss, token, '&')){
         size_t equalPos = token.find('=');
-        if(equalPos != string::npos){
-            auto key = token.substr(0, equalPos);
-            if(key == "ssid"){
-                result.first = url_decode(token.substr(equalPos + 1));
-            }
-            if(key == "password"){
-                result.second = url_decode(token.substr(equalPos + 1));
-            }
+        if(equalPos == string::npos){
+            continue;
+        }
+        auto key = token.substr(0, equalPos);
+        if(key == "ssid"){
+            result.first = url_decode(token.substr(equalPos + 1));
+        }
+        if(key == "password"){
+            result.second = url_decode(token.substr(equalPos + 1));
         }
     }
     return result;
@@ -150,18 +167,20 @@ esp_err_t indexPage(httpd_req_t* req){
 }
 
 esp_err_t savePage(httpd_req_t* req){
-    httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
-
     char content[req->content_len + 1] = {0};
     int ret = httpd_req_recv(req, content, req->content_len);
     if(ret > 0){
         auto data = parseParameter(content);
         if(data.first.length() > 0 && data.second.length() > 7){
+            httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
+
             wifi_config_t staConfig = {0};
             strcpy((char*) staConfig.sta.ssid, data.first.c_str());
             strcpy((char*) staConfig.sta.password, data.second.c_str());
             ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &staConfig));
             esp_wifi_connect();
+        }else{
+            httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
         }
     }else{
         if(ret == HTTPD_SOCK_ERR_TIMEOUT){
