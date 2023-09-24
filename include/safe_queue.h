@@ -20,10 +20,10 @@ public:
 		c.notify_one();
 	}
 
-    bool empty(){
+	bool empty(){
 		std::lock_guard<std::mutex> lock(m);
-        return q.empty();
-    }
+		return q.empty();
+	}
 
 	T pop(){
 		std::unique_lock<std::mutex> lock(m);
