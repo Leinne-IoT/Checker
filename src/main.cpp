@@ -153,16 +153,18 @@ void networkLoop(void* args){
             continue;
         }
 
-        DynamicJsonDocument json(2048);
+        DynamicJsonDocument json(1024);
         json["id"] = getDeviceId(storage);
         JsonArray dataArray = json.createNestedArray("data");
 
+        uint8_t length = 0;
         do{
+            ++length;
             auto data = doorStateQueue.pop();
             auto array = dataArray.createNestedArray();
             array.add(data.open ? 1 : 0);
             array.add(data.updateTime);
-        }while(!doorStateQueue.empty());
+        }while(length < 10 && !doorStateQueue.empty());
         
         sendPhase = true;
         esp_http_client_config_t config = {.url = "http://leinne.net:33877/req_door"};
