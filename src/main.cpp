@@ -21,7 +21,7 @@
 #define SWITCH_PIN GPIO_NUM_7
 #endif
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #include "log.h"
 #include "web.h"
@@ -173,7 +173,7 @@ void networkLoop(void* args){
         esp_err_t err = ESP_FAIL;
         while(err != ESP_OK){
             string body;
-            json["current"] = esp_timer_get_time() / 1000LL;
+            json["current"] = esp_timer_get_time() / 1000LL + 100; // 전송시의 약간의 오차 100ms 추가
             serializeJson(json, body);
             esp_http_client_set_post_field(client, body.c_str(), body.length());
             err = esp_http_client_perform(client);
