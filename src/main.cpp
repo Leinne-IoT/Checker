@@ -90,7 +90,7 @@ static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data
 static void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
     connectWifi = true;
     ip_event_got_ip_t* ipData = (ip_event_got_ip_t*) data;
-    debug("[WiFi] 아이피: " IPSTR, IP2STR(&ipData->ip_info.ip));
+    debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&ipData->ip_info.ip));
 }
 
 void initWiFi(){
