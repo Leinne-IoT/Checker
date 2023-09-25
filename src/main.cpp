@@ -225,7 +225,7 @@ void checkDoor(void* args){
             esp_sleep_enable_ext0_wakeup(SWITCH_PIN, !lastOpenDoor);
 
             #if defined(DEBUG_MODE) && defined(CONFIG_IDF_TARGET_ESP32S3)
-            lastUpdateTime = esp_timer_get_time();
+            lastUpdateTime = millis();
             #else
             esp_deep_sleep_start();
             #endif
