@@ -191,7 +191,7 @@ void networkLoop(void* args){
 
 void checkDoorState(){
     DoorState state = {
-        .open = gpio_get_level(SWITCH_PIN),
+        .open = gpio_get_level(SWITCH_PIN) == 1,
         .updateTime = millis(),
     };
 
