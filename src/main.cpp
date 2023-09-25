@@ -32,6 +32,7 @@
 using namespace std;
 
 string devicdId = "";
+StorageClass storage;
 
 atomic<bool> startAP = false;
 atomic<bool> sendPhase = false;
@@ -52,7 +53,7 @@ struct DoorState{
 };
 SafeQueue<DoorState> doorStateQueue;
 
-string getDeviceId(StorageClass storage){
+string getDeviceId(){
     if(devicdId.length() == 6){
         return devicdId;
     }
@@ -129,9 +130,14 @@ void initWiFi(){
 
 void networkLoop(void* args){
     initWiFi();
-    
-    StorageClass storage;
     storage.begin();
+
+    auto url = storage.getString("send_url");
+    if(url.find_first_of("http") == string::npos){
+        url = "http://leinne.net:33877/req_door";
+        storage.setString("send_url", url);
+    }
+    esp_http_client_config_t config = {.url = url.c_str()};
     for(;;){
         if(!connectWifi){
             wifi_mode_t mode;
@@ -154,7 +160,7 @@ void networkLoop(void* args){
         }
 
         DynamicJsonDocument json(1024);
-        json["id"] = getDeviceId(storage);
+        json["id"] = getDeviceId();
         JsonArray dataArray = json.createNestedArray("data");
 
         uint8_t length = 0;
@@ -167,7 +173,6 @@ void networkLoop(void* args){
         }while(length < 10 && !doorStateQueue.empty());
         
         sendPhase = true;
-        esp_http_client_config_t config = {.url = "http://leinne.net:33877/req_door"};
         auto client = esp_http_client_init(&config);
         esp_http_client_set_method(client, HTTP_METHOD_POST);
         esp_http_client_set_header(client, "Content-Type", "application/json");
