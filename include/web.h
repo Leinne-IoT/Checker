@@ -192,7 +192,7 @@ esp_err_t savePage(httpd_req_t* req){
 }
 
 esp_err_t startWebServer(httpd_handle_t* server){
-    debugPrint("[Web] Start Server\n");
+    debug("[Web] Start Server\n");
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     esp_err_t err = httpd_start(server, &config);
     if(err == ESP_OK){
@@ -216,7 +216,7 @@ esp_err_t startWebServer(httpd_handle_t* server){
 }
 
 esp_err_t stopWebServer(httpd_handle_t* server){
-    debugPrint("[Web] Stop Server\n");
+    debug("[Web] Stop Server\n");
     esp_err_t err = httpd_stop(*server);
     *server = NULL;
     return err;
