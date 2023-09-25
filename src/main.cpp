@@ -71,7 +71,7 @@ string getDeviceId(StorageClass storage){
 }
 
 static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-    debugPrint("[WiFi] Code: %ld\n", id);
+    debug("[WiFi] Code: %ld\n", id);
     switch(id){
         case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -90,7 +90,7 @@ static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data
 static void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
     connectWifi = true;
     ip_event_got_ip_t* ipData = (ip_event_got_ip_t*) data;
-    debugPrint("[WiFi] 아이피: " IPSTR, IP2STR(&ipData->ip_info.ip));
+    debug("[WiFi] 아이피: " IPSTR, IP2STR(&ipData->ip_info.ip));
 }
 
 void initWiFi(){
@@ -146,7 +146,7 @@ void networkLoop(void* args){
                     wifiTryConnectTime = now;
                 }
                 if(now - wifiTryConnectTime >= 8 * 1000000){
-                    debugPrint("[WiFi] Start AP Mode\n");
+                    debug("[WiFi] Start AP Mode\n");
                     esp_wifi_set_mode(WIFI_MODE_APSTA);
                 }
             }
@@ -193,7 +193,7 @@ void checkDoor(void* args){
                 .open = openDoor,
                 .updateTime = esp_timer_get_time() / 1000LL,
             });
-            debugPrint(openDoor ? "문 열림\n" : "문 닫힘\n");
+            debug(openDoor ? "문 열림\n" : "문 닫힘\n");
 
             lastOpenDoor = openDoor;
             lastUpdateTime = esp_timer_get_time();
@@ -204,14 +204,14 @@ void checkDoor(void* args){
         }
 
         if(server != NULL){
-            debugPrint("[WiFi] Stop AP Mode\n");
+            debug("[WiFi] Stop AP Mode\n");
             ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
             stopWebServer(&server);
             lastUpdateTime = esp_timer_get_time();
         }
         
         if(!sendPhase && esp_timer_get_time() - lastUpdateTime > 8 * 1000000){
-            debugPrint("[SLEEP] Start Deep Sleep\n");
+            debug("[SLEEP] Start Deep Sleep\n");
             rtc_gpio_pullup_en(SWITCH_PIN);
             esp_sleep_enable_ext0_wakeup(SWITCH_PIN, openDoor);
 
@@ -236,10 +236,10 @@ extern "C" void app_main(){
             .open = lastOpenDoor,
             .updateTime = esp_timer_get_time() / 1000LL,
         });
-        debugPrint(lastOpenDoor ? "문 열림\n" : "문 닫힘\n");
+        debug(lastOpenDoor ? "문 열림\n" : "문 닫힘\n");
     }else{
         lastOpenDoor = !gpio_get_level(SWITCH_PIN);
-        debugPrint("[MAIN] Wake Up Cause: %d\n", cause);
+        debug("[MAIN] Wake Up Cause: %d\n", cause);
     }
 
     xTaskCreatePinnedToCore(checkDoor, "door", 10000, NULL, 1, &doorTask, 0);
