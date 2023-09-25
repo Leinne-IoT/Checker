@@ -72,7 +72,6 @@ string getDeviceId(){
 }
 
 static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-    debug("[WiFi] Code: %ld\n", id);
     switch(id){
         case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -190,19 +189,24 @@ void networkLoop(void* args){
     }
 }
 
+void checkDoorState(){
+    DoorState state = {
+        .open = gpio_get_level(SWITCH_PIN),
+        .updateTime = millis(),
+    };
+
+    if(lastOpenDoor != state.open){
+        doorStateQueue.push(state);
+        debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
+
+        lastOpenDoor = state.open;
+        lastUpdateTime = state.updateTime;
+    }
+}
+
 void checkDoor(void* args){
     for(;;){
-        bool openDoor = !gpio_get_level(SWITCH_PIN);
-        if(lastOpenDoor != openDoor){
-            doorStateQueue.push({
-                .open = openDoor,
-                .updateTime = esp_timer_get_time() / 1000LL,
-            });
-            debug(openDoor ? "문 열림\n" : "문 닫힘\n");
-
-            lastOpenDoor = openDoor;
-            lastUpdateTime = esp_timer_get_time();
-        }
+        checkDoorState();
 
         if(!connectWifi){
             continue;
@@ -212,13 +216,13 @@ void checkDoor(void* args){
             debug("[WiFi] Stop AP Mode\n");
             ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
             stopWebServer(&server);
-            lastUpdateTime = esp_timer_get_time();
+            lastUpdateTime = millis();
         }
         
-        if(!sendPhase && esp_timer_get_time() - lastUpdateTime > 8 * 1000000){
+        if(!sendPhase && millis() - lastUpdateTime > 8 * 1000){
             debug("[SLEEP] Start Deep Sleep\n");
             rtc_gpio_pullup_en(SWITCH_PIN);
-            esp_sleep_enable_ext0_wakeup(SWITCH_PIN, openDoor);
+            esp_sleep_enable_ext0_wakeup(SWITCH_PIN, !lastOpenDoor);
 
             #if defined(DEBUG_MODE) && defined(CONFIG_IDF_TARGET_ESP32S3)
             lastUpdateTime = esp_timer_get_time();
@@ -236,14 +240,14 @@ extern "C" void app_main(){
 
     auto cause = esp_sleep_get_wakeup_cause();
     if(cause == ESP_SLEEP_WAKEUP_EXT0){
-        lastOpenDoor = !lastOpenDoor;
-        doorStateQueue.push({
-            .open = lastOpenDoor,
-            .updateTime = esp_timer_get_time() / 1000LL,
-        });
-        debug(lastOpenDoor ? "문 열림\n" : "문 닫힘\n");
+        DoorState state = {
+            .open = lastOpenDoor = !lastOpenDoor,
+            .updateTime = millis(),
+        };
+        doorStateQueue.push(state);
+        debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
     }else{
-        lastOpenDoor = !gpio_get_level(SWITCH_PIN);
+        checkDoorState();
         debug("[MAIN] Wake Up Cause: %d\n", cause);
     }
 

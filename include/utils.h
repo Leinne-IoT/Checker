@@ -19,3 +19,7 @@ uint32_t random(uint32_t howsmall, uint32_t howbig){
     }
     return random(howbig - howsmall) + howsmall;
 }
+
+inline int64_t millis(){
+    return esp_timer_get_time() / 1000LL;
+}
