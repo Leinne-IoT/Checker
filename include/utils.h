@@ -7,7 +7,7 @@
 
 using namespace std;
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #ifdef DEBUG_MODE
 #define debug(fmt, args...) printf(fmt, ##args)
