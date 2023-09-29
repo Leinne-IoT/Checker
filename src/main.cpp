@@ -1,30 +1,28 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <nvs.h>
 #include <string.h>
-#include <esp_system.h>
-#include <esp_wifi.h>
 #include <esp_timer.h>
-#include <esp_log.h>
 #include <nvs_flash.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
-#include <driver/rtc_io.h>
 #include <ArduinoJson.h>
-#include <string>
+#include <driver/rtc_io.h>
 #include <esp_http_client.h>
 #include <atomic>
+#include <string>
 
 #ifdef CONFIG_IDF_TARGET_ESP32
+#define RESET_PIN GPIO_NUM_26
 #define SWITCH_PIN GPIO_NUM_25
+#define LED_BUILTIN GPIO_NUM_2
 #else
+#define RESET_PIN GPIO_NUM_8
 #define SWITCH_PIN GPIO_NUM_7
+#define LED_BUILTIN GPIO_NUM_21
 #endif
 
-//#define DEBUG_MODE
-
-#include "log.h"
 #include "web.h"
+#include "wifi.h"
 #include "utils.h"
 #include "storage.h"
 #include "safe_queue.h"
@@ -34,9 +32,7 @@ using namespace std;
 string devicdId = "";
 StorageClass storage;
 
-atomic<bool> startAP = false;
 atomic<bool> sendPhase = false;
-atomic<bool> connectWifi = false;
 
 httpd_handle_t server = NULL;
 
@@ -71,62 +67,6 @@ string getDeviceId(){
     return devicdId;
 }
 
-static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-    switch(id){
-        case WIFI_EVENT_STA_START:
-        case WIFI_EVENT_STA_DISCONNECTED:
-            esp_wifi_connect();
-            connectWifi = false;
-            break;
-        case WIFI_EVENT_AP_START:
-            startAP = true;
-            break;
-        case WIFI_EVENT_AP_STOP:
-            startAP = false;
-            break;
-    }
-}
-
-static void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
-    connectWifi = true;
-    ip_event_got_ip_t* ipData = (ip_event_got_ip_t*) data;
-    debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&ipData->ip_info.ip));
-}
-
-void initWiFi(){
-    esp_err_t err = nvs_flash_init();
-    if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND){
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
-
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    esp_netif_create_default_wifi_ap();
-    esp_netif_create_default_wifi_sta();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ipHandler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiHandler, NULL));
-
-    wifi_config_t apConfig = {
-        .ap = {
-            .ssid = "Checker",
-            .password = "",
-            .ssid_len = strlen("Checker"),
-            .authmode = WIFI_AUTH_OPEN,
-            .max_connection = 1,
-        }
-    };
-    esp_wifi_set_config(WIFI_IF_AP, &apConfig);
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-}
-
 void networkLoop(void* args){
     initWiFi();
     storage.begin();
@@ -143,7 +83,7 @@ void networkLoop(void* args){
             esp_wifi_get_mode(&mode);
             if(mode == WIFI_MODE_APSTA){
                 if(startAP && server == NULL){
-                    startWebServer(&server);
+                    startWebServer(server);
                 }
             }else{
                 auto now = esp_timer_get_time();
@@ -164,12 +104,11 @@ void networkLoop(void* args){
 
         uint8_t length = 0;
         do{
-            ++length;
             auto data = doorStateQueue.pop();
             auto array = dataArray.createNestedArray();
             array.add(data.open ? 1 : 0);
             array.add(data.updateTime);
-        }while(length < 10 && !doorStateQueue.empty());
+        }while(++length < 10 && !doorStateQueue.empty());
         
         sendPhase = true;
         auto client = esp_http_client_init(&config);
@@ -189,12 +128,15 @@ void networkLoop(void* args){
     }
 }
 
-void checkDoorState(){
-    DoorState state = {
+DoorState getDoorState(){
+    return {
         .open = gpio_get_level(SWITCH_PIN) != 0,
         .updateTime = millis(),
     };
+}
 
+void checkDoorState(){
+    auto state = getDoorState();
     if(lastOpenDoor != state.open){
         doorStateQueue.push(state);
         debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
@@ -213,9 +155,8 @@ void checkDoor(void* args){
         }
 
         if(server != NULL){
-            debug("[WiFi] Stop AP Mode\n");
-            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
             stopWebServer(&server);
+            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
             lastUpdateTime = millis();
         }
         
@@ -235,7 +176,9 @@ void checkDoor(void* args){
 }
 
 extern "C" void app_main(){
+    gpio_pullup_en(RESET_PIN);
     gpio_pullup_en(SWITCH_PIN);
+    gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);
     gpio_set_direction(SWITCH_PIN, GPIO_MODE_INPUT);
 
     auto cause = esp_sleep_get_wakeup_cause();
@@ -247,7 +190,7 @@ extern "C" void app_main(){
         doorStateQueue.push(state);
         debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
     }else{
-        checkDoorState();
+        lastOpenDoor = getDoorState().open;
         debug("[MAIN] Wake Up Cause: %d\n", cause);
     }
 

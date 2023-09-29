@@ -1,3 +1,5 @@
+#pragma once
+
 #include <esp_sleep.h>
 
 void hibernate(){

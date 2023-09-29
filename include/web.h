@@ -1,12 +1,12 @@
+#pragma once
+
 #include <string>
 #include <utility>
 #include <sstream>
 #include <esp_wifi.h>
 #include <esp_http_server.h>
 
-#include "log.h"
-
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#include "utils.h"
 
 using namespace std;
 
@@ -94,28 +94,6 @@ R"rawliteral(
 </html>
 )rawliteral";
 
-string url_decode(const string& encoded){
-    ostringstream decoded;
-    for(size_t i = 0; i < encoded.length(); ++i){
-        if(encoded[i] == '%'){
-            if(i + 2 < encoded.length()){
-                int decoded_char;
-                char hexStr[3] = {encoded[i + 1], encoded[i + 2], '\0'};
-                istringstream(hexStr) >> hex >> decoded_char;
-                decoded << static_cast<char>(decoded_char);
-                i += 2;
-            }else{
-                return "";
-            }
-        }else if(encoded[i] == '+'){
-            decoded << ' ';
-        }else{
-            decoded << encoded[i];
-        }
-    }
-    return decoded.str();
-}
-
 pair<string, string> parseParameter(char* data){
     string token;
     istringstream iss(data);
@@ -127,10 +105,10 @@ pair<string, string> parseParameter(char* data){
         }
         auto key = token.substr(0, equalPos);
         if(key == "ssid"){
-            result.first = url_decode(token.substr(equalPos + 1));
+            result.first = urlDecode(token.substr(equalPos + 1));
         }
         if(key == "password"){
-            result.second = url_decode(token.substr(equalPos + 1));
+            result.second = urlDecode(token.substr(equalPos + 1));
         }
     }
     return result;
@@ -155,9 +133,9 @@ string getIndexPage(bool scan){
         for(uint16_t i = 0; i < length; i++){
             ssidInput += "<option>" + string((char*) apInfo[i].ssid) + "</option>";
         }
-        index.replace(index.find("${ssid}"), 7, ssidInput + "</select>");
+        strReplace(index, "${ssid}", ssidInput + "</select>");
     }else{
-        index.replace(index.find("${ssid}"), 7, "<input type='text' required maxlength='100' name='ssid'>");
+        strReplace(index, "${ssid}", "<input type='text' required maxlength='100' name='ssid'>");
     }
     return index;
 }
@@ -191,10 +169,10 @@ esp_err_t savePage(httpd_req_t* req){
     return ESP_OK;
 }
 
-esp_err_t startWebServer(httpd_handle_t* server){
+esp_err_t startWebServer(httpd_handle_t server){
     debug("[Web] Start Server\n");
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    esp_err_t err = httpd_start(server, &config);
+    esp_err_t err = httpd_start(&server, &config);
     if(err == ESP_OK){
         httpd_uri_t index = {
             .uri = "/",
@@ -202,7 +180,7 @@ esp_err_t startWebServer(httpd_handle_t* server){
             .handler = indexPage,
             .user_ctx = NULL
         };
-        httpd_register_uri_handler(*server, &index);
+        httpd_register_uri_handler(server, &index);
 
         httpd_uri_t saveUri = {
             .uri = "/save",
@@ -210,14 +188,14 @@ esp_err_t startWebServer(httpd_handle_t* server){
             .handler = savePage,
             .user_ctx = NULL
         };
-        httpd_register_uri_handler(*server, &saveUri);
+        httpd_register_uri_handler(server, &saveUri);
     }
     return err;
 }
 
-esp_err_t stopWebServer(httpd_handle_t* server){
+esp_err_t stopWebServer(httpd_handle_t server){
     debug("[Web] Stop Server\n");
-    esp_err_t err = httpd_stop(*server);
-    *server = NULL;
+    esp_err_t err = httpd_stop(server);
+    server = NULL;
     return err;
 }

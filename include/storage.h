@@ -1,3 +1,5 @@
+#pragma once
+
 #include <nvs.h>
 #include <string>
 
