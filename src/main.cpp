@@ -122,6 +122,7 @@ void checkDoor(void* args){
     for(;;){
         checkDoorState();
         if(gpio_get_level(RESET_PIN) == 0){
+            lastUpdateTime = millis();
             if(lastReset == -1){
                 lastReset = millis();
             }else if(millis() - lastReset > 5 * 1000){
