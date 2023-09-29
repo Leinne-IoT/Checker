@@ -22,6 +22,7 @@
 #endif
 
 #include "web.h"
+#include "door.h"
 #include "wifi.h"
 #include "utils.h"
 #include "storage.h"
@@ -34,20 +35,12 @@ StorageClass storage;
 
 atomic<bool> sendPhase = false;
 
-httpd_handle_t server = NULL;
-
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
 RTC_DATA_ATTR bool lastOpenDoor = false;
 
 TaskHandle_t doorTask;
 TaskHandle_t networkTask;
-
-struct DoorState{
-    bool open;
-    int64_t updateTime;
-};
-SafeQueue<DoorState> doorStateQueue;
 
 string getDeviceId(){
     if(devicdId.length() == 6){
@@ -79,13 +72,7 @@ void networkLoop(void* args){
     esp_http_client_config_t config = {.url = url.c_str()};
     for(;;){
         if(!connectWifi){
-            wifi_mode_t mode;
-            esp_wifi_get_mode(&mode);
-            if(mode == WIFI_MODE_APSTA){
-                if(startAP && server == NULL){
-                    startWebServer(server);
-                }
-            }else{
+            if(getWiFiStatus() != WIFI_MODE_APSTA){
                 auto now = esp_timer_get_time();
                 if(wifiTryConnectTime == 0){
                     wifiTryConnectTime = now;
@@ -94,6 +81,8 @@ void networkLoop(void* args){
                     debug("[WiFi] Start AP Mode\n");
                     esp_wifi_set_mode(WIFI_MODE_APSTA);
                 }
+            }else if(startAP){
+                startWebServer();
             }
             continue;
         }
@@ -128,34 +117,26 @@ void networkLoop(void* args){
     }
 }
 
-DoorState getDoorState(){
-    return {
-        .open = gpio_get_level(SWITCH_PIN) != 0,
-        .updateTime = millis(),
-    };
-}
-
-void checkDoorState(){
-    auto state = getDoorState();
-    if(lastOpenDoor != state.open){
-        doorStateQueue.push(state);
-        debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
-
-        lastOpenDoor = state.open;
-        lastUpdateTime = state.updateTime;
-    }
-}
-
 void checkDoor(void* args){
+    int64_t lastReset = -1;
     for(;;){
         checkDoorState();
+        if(gpio_get_level(RESET_PIN) == 0){
+            if(lastReset == -1){
+                lastReset = millis();
+            }else if(millis() - lastReset > 5 * 1000){
+                clearWiFiData();
+            }
+        }else{
+            lastReset = -1;
+        }
 
         if(!connectWifi){
             continue;
         }
 
         if(server != NULL){
-            stopWebServer(&server);
+            stopWebServer();
             ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
             lastUpdateTime = millis();
         }
@@ -171,7 +152,6 @@ void checkDoor(void* args){
             esp_deep_sleep_start();
             #endif
         }
-        //vTaskDelay(20 / portTICK_PERIOD_MS);
     }
 }
 

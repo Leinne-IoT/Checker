@@ -94,6 +94,8 @@ R"rawliteral(
 </html>
 )rawliteral";
 
+httpd_handle_t server = NULL;
+
 pair<string, string> parseParameter(char* data){
     string token;
     istringstream iss(data);
@@ -169,9 +171,15 @@ esp_err_t savePage(httpd_req_t* req){
     return ESP_OK;
 }
 
-esp_err_t startWebServer(httpd_handle_t server){
+esp_err_t startWebServer(){
+    if(server != NULL){
+        return ESP_OK;
+    }
+
     debug("[Web] Start Server\n");
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.stack_size = 8192;
+
     esp_err_t err = httpd_start(&server, &config);
     if(err == ESP_OK){
         httpd_uri_t index = {
@@ -193,7 +201,11 @@ esp_err_t startWebServer(httpd_handle_t server){
     return err;
 }
 
-esp_err_t stopWebServer(httpd_handle_t server){
+esp_err_t stopWebServer(){
+    if(server == NULL){
+        return ESP_OK;
+    }
+
     debug("[Web] Stop Server\n");
     esp_err_t err = httpd_stop(server);
     server = NULL;

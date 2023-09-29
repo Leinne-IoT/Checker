@@ -33,6 +33,28 @@ void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
     debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip));
 }
 
+void clearWiFiData(){
+    wifi_config_t staConfig = {
+        .sta = {
+            .ssid = "",
+            .password = "",
+        }
+    };
+    esp_wifi_set_config(WIFI_IF_STA, &staConfig);
+
+    wifi_config_t apConfig = {
+        .ap = {
+            .ssid = "Checker",
+            .password = "",
+            .ssid_len = 7,
+            .authmode = WIFI_AUTH_OPEN,
+            .max_connection = 1,
+        }
+    };
+    esp_wifi_set_config(WIFI_IF_AP, &apConfig);
+    esp_restart();
+}
+
 void initWiFi(){
     esp_err_t err = nvs_flash_init();
     if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND){
@@ -65,4 +87,12 @@ void initWiFi(){
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
+}
+
+wifi_mode_t getWiFiStatus(){
+    wifi_mode_t mode;
+    if(esp_wifi_get_mode(&mode) == ESP_OK){
+        return mode;
+    }
+    return WIFI_MODE_NULL;
 }
