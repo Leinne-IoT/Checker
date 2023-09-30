@@ -26,6 +26,7 @@
 #include "utils.h"
 #include "storage.h"
 #include "safe_queue.h"
+#include "esp_websocket_client.h"
 
 using namespace std;
 
@@ -33,9 +34,6 @@ atomic<bool> sendPhase = false;
 
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
-
-TaskHandle_t doorTask;
-TaskHandle_t networkTask;
 
 void networkLoop(void* args){
     esp_err_t err = nvs_flash_init();
@@ -48,11 +46,26 @@ void networkLoop(void* args){
     initWiFi();
     storage::begin();
 
-    auto url = storage::getString("send_url");
+    auto url = storage::getString("websocket_url");
     if(url.find_first_of("http") == string::npos){
-        url = "http://leinne.net:33877/req_door";
-        storage::setString("send_url", url);
+        url = "ws://leinne.net:33877/";
+        storage::setString("websocket_url", url);
     }
+
+    esp_websocket_client_handle_t client = NULL;
+    esp_websocket_client_config_t websocket_cfg = {
+        .uri = url.c_str(),
+        .reconnect_timeout_ms = 500,
+    };
+
+    while(client == NULL){
+        client = esp_websocket_client_init(&websocket_cfg);
+        if(esp_websocket_client_start(client) != ESP_OK){
+            client = NULL;
+        }
+        //esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)client);
+    }
+
     esp_http_client_config_t config = {.url = url.c_str()};
     for(;;){
         if(!connectWifi){
@@ -71,32 +84,28 @@ void networkLoop(void* args){
             continue;
         }
 
-        DynamicJsonDocument json(1024);
-        json["id"] = storage::getDeviceId();
-        JsonArray dataArray = json.createNestedArray("data");
+        auto state = doorStateQueue.pop();
 
-        uint8_t length = 0;
-        do{
-            auto data = doorStateQueue.pop();
-            auto array = dataArray.createNestedArray();
-            array.add(data.open ? 1 : 0);
-            array.add(data.updateTime);
-        }while(++length < 10 && !doorStateQueue.empty());
-        
         sendPhase = true;
-        auto client = esp_http_client_init(&config);
-        esp_http_client_set_method(client, HTTP_METHOD_POST);
-        esp_http_client_set_header(client, "Content-Type", "application/json");
+        while(!esp_websocket_client_is_connected(client));
 
-        esp_err_t err = ESP_FAIL;
-        while(err != ESP_OK){
-            string body;
-            json["current"] = esp_timer_get_time() / 1000LL + 100; // 전송시의 약간의 오차 100ms 추가
-            serializeJson(json, body);
-            esp_http_client_set_post_field(client, body.c_str(), body.length());
-            err = esp_http_client_perform(client);
+        auto device = storage::getDeviceId();
+        uint8_t buffer[64] = {
+            state.open,
+        };
+        
+        uint8_t i = 1;
+        for(uint8_t max = i + 4; i < max; ++i){
+            buffer[i] = (state.updateTime >> (8 * (max - i - 1))) & 255;
         }
-        esp_http_client_cleanup(client);
+        auto current = millis();
+        for(uint8_t max = i + 4; i < max; ++i){
+            buffer[i] = (current >> (8 * (max - i - 1))) & 255;
+        }
+        for(uint8_t j = 0; j < device.length(); ++j){
+            buffer[i++] = device[j];
+        }
+        esp_websocket_client_send_with_opcode(client, WS_TRANSPORT_OPCODES_BINARY, buffer, i - 1, portMAX_DELAY);
         sendPhase = false;
     }
 }
@@ -126,17 +135,15 @@ void checkDoor(void* args){
             lastUpdateTime = millis();
         }
         
+        #if !defined(DEBUG_MODE)
         if(!sendPhase && millis() - lastUpdateTime > 8 * 1000){
             debug("[SLEEP] Start Deep Sleep\n");
             rtc_gpio_pullup_en(SWITCH_PIN);
             esp_sleep_enable_ext0_wakeup(SWITCH_PIN, !lastOpenDoor);
 
-            #if defined(DEBUG_MODE) && defined(CONFIG_IDF_TARGET_ESP32S3)
-            lastUpdateTime = millis();
-            #else
             esp_deep_sleep_start();
-            #endif
         }
+        #endif
     }
 }
 
@@ -156,9 +163,12 @@ extern "C" void app_main(){
         debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
     }else{
         lastOpenDoor = getDoorState().open;
-        debug("[MAIN] Wake Up Cause: %d\n", cause);
+        debug("[Main] Wake Up Cause: %d\n", cause);
     }
 
-    xTaskCreatePinnedToCore(checkDoor, "door", 10000, NULL, 1, &doorTask, 0);
-    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 1);
+    TaskHandle_t doorTask;
+    TaskHandle_t networkTask;
+    auto core = esp_cpu_get_core_id();
+    xTaskCreatePinnedToCore(checkDoor, "door", 10000, NULL, 1, &doorTask, !core);
+    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, core);
 }
