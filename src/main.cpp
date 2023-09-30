@@ -7,6 +7,8 @@
 #include <ArduinoJson.h>
 #include <driver/rtc_io.h>
 #include <esp_http_client.h>
+//#include <esp_sntp.h>
+//#include <esp_netif_sntp.h>
 #include <atomic>
 #include <string>
 
@@ -46,10 +48,32 @@ void networkLoop(void* args){
     initWiFi();
     storage::begin();
 
+    /** 
+     * 내부 타이머 대신 실제 시간을 활용하여 열림/닫힘에 대한
+     * 정확한 시간을 확보하여 전달하고자 하였으나
+     * sntp 서버에 연결하는 시간이 너무 오래걸려 비활성화했습니다.
+     * 
+     * 데이터가 신속하게 전달되는것보다 ms 단위의 정밀한 기록이 중요하다면
+     * 해당 기능을 활성화해도 됩니다. (기능 활성화시 약 15~20초[WiFi 연결시간 + sntp 연결시간]가 걸림)
+     */
+
+    /*esp_sntp_config_t config = {
+        .smooth_sync = false,
+        .server_from_dhcp = true,
+        .wait_for_sync = true,
+        .start = false,
+        .sync_cb = NULL,
+        .renew_servers_after_new_IP = true,
+        .ip_event_to_renew = IP_EVENT_STA_GOT_IP,
+        .index_of_first_server = 0,
+        .num_of_servers = 1,
+        .servers = {"time.google.com"}
+    };
+    esp_netif_sntp_init(&config);*/
+
     auto url = storage::getString("websocket_url");
     if(url.find_first_of("http") == string::npos){
-        url = "ws://leinne.net:33877/";
-        storage::setString("websocket_url", url);
+        storage::setString("websocket_url", url = "ws://leinne.net:33877/");
     }
 
     esp_websocket_client_handle_t client = NULL;
@@ -57,14 +81,6 @@ void networkLoop(void* args){
         .uri = url.c_str(),
         .reconnect_timeout_ms = 500,
     };
-
-    while(client == NULL){
-        client = esp_websocket_client_init(&websocket_cfg);
-        if(esp_websocket_client_start(client) != ESP_OK){
-            client = NULL;
-        }
-        //esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)client);
-    }
 
     esp_http_client_config_t config = {.url = url.c_str()};
     for(;;){
@@ -87,25 +103,33 @@ void networkLoop(void* args){
         auto state = doorStateQueue.pop();
 
         sendPhase = true;
-        while(!esp_websocket_client_is_connected(client));
+        while(!esp_websocket_client_is_connected(client)){
+            if(client != NULL){
+                continue;
+            }
+            client = esp_websocket_client_init(&websocket_cfg);
+            if(esp_websocket_client_start(client) != ESP_OK){
+                client = NULL;
+            }
+        }
+
+        uint8_t i = 1;
+        uint8_t buffer[64] = {state.open};
+        
+        for(uint8_t max = i + 8; i < max; ++i){
+            buffer[i] = (state.updateTime >> (8 * (max - i - 1))) & 0xFF;
+        }
+
+        auto current = millis();
+        for(uint8_t max = i + 8; i < max; ++i){
+            buffer[i] = (current >> (8 * (max - i - 1))) & 0xFF;
+        }
 
         auto device = storage::getDeviceId();
-        uint8_t buffer[64] = {
-            state.open,
-        };
-        
-        uint8_t i = 1;
-        for(uint8_t max = i + 4; i < max; ++i){
-            buffer[i] = (state.updateTime >> (8 * (max - i - 1))) & 255;
-        }
-        auto current = millis();
-        for(uint8_t max = i + 4; i < max; ++i){
-            buffer[i] = (current >> (8 * (max - i - 1))) & 255;
-        }
         for(uint8_t j = 0; j < device.length(); ++j){
             buffer[i++] = device[j];
         }
-        esp_websocket_client_send_with_opcode(client, WS_TRANSPORT_OPCODES_BINARY, buffer, i - 1, portMAX_DELAY);
+        esp_websocket_client_send_with_opcode(client, WS_TRANSPORT_OPCODES_BINARY, buffer, i, portMAX_DELAY);
         sendPhase = false;
     }
 }
