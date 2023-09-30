@@ -1,6 +1,5 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <string.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
 #include <esp_sleep.h>
@@ -30,44 +29,29 @@
 
 using namespace std;
 
-string devicdId = "";
-StorageClass storage;
-
 atomic<bool> sendPhase = false;
 
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
-RTC_DATA_ATTR bool lastOpenDoor = false;
 
 TaskHandle_t doorTask;
 TaskHandle_t networkTask;
 
-string getDeviceId(){
-    if(devicdId.length() == 6){
-        return devicdId;
-    }
-
-    string id = storage.getString("DEVICE_ID", 7);
-    if(id.length() == 6){
-        return devicdId = id;
-    }else{
-        stringstream stream;
-        for(uint8_t i = 0; i < 6; ++i){
-            stream << (char) random('a', 'z');
-        }
-        storage.setString("DEVICE_ID", devicdId = stream.str(), false);
-    }
-    return devicdId;
-}
-
 void networkLoop(void* args){
-    initWiFi();
-    storage.begin();
+    esp_err_t err = nvs_flash_init();
+    if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND){
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
 
-    auto url = storage.getString("send_url");
+    initWiFi();
+    storage::begin();
+
+    auto url = storage::getString("send_url");
     if(url.find_first_of("http") == string::npos){
         url = "http://leinne.net:33877/req_door";
-        storage.setString("send_url", url);
+        storage::setString("send_url", url);
     }
     esp_http_client_config_t config = {.url = url.c_str()};
     for(;;){
@@ -88,7 +72,7 @@ void networkLoop(void* args){
         }
 
         DynamicJsonDocument json(1024);
-        json["id"] = getDeviceId();
+        json["id"] = storage::getDeviceId();
         JsonArray dataArray = json.createNestedArray("data");
 
         uint8_t length = 0;
@@ -120,7 +104,7 @@ void networkLoop(void* args){
 void checkDoor(void* args){
     int64_t lastReset = -1;
     for(;;){
-        checkDoorState();
+        checkDoorState(&lastUpdateTime);
         if(gpio_get_level(RESET_PIN) == 0){
             lastUpdateTime = millis();
             if(lastReset == -1){
