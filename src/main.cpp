@@ -30,12 +30,54 @@
 #include "safe_queue.h"
 #include "esp_websocket_client.h"
 
+#ifdef DEBUG_MODE
+#define DEEP_SLEEP_DELAY 0xFFFFFFFF
+#else
+#define DEEP_SLEEP_DELAY 8000
+#endif
+
 using namespace std;
 
-atomic<bool> sendPhase = false;
+typedef enum{
+    CONTINUITY,
+    STRING,
+    BINARY,
+    QUIT = 0x08,
+    PING,
+    PONG
+} websocket_opcode_t;
 
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
+
+atomic<uint32_t> sleepDelay = DEEP_SLEEP_DELAY;
+
+static void websocketHandler(void *args, esp_event_base_t base, int32_t eventId, void *eventData){
+    esp_websocket_event_data_t* data = (esp_websocket_event_data_t*) eventData;
+    switch(data->op_code){
+        case CONTINUITY:
+            debug("[WS] Received CONTINUITY\n");
+            break;
+        case STRING:
+            debug("[WS] Received string data: %.*s\n", data->data_len, (char*) data->data_ptr);
+            break;
+        case BINARY:
+            debug("[WS] Received binary data\n");
+            break;
+        case QUIT:
+            debug("[WS] Received closed message with code=%d\n", 256 * data->data_ptr[0] + data->data_ptr[1]);
+            break;
+        /*case PING:
+            debug("[WS] Received PING\n");
+            break;
+        case PONG:
+            debug("[WS] Received PONG\n");
+            break;
+        default:
+            debug("[WS] Received unknown data\n");
+            break;*/
+    }
+}
 
 static void networkLoop(void* args){
     esp_err_t err = nvs_flash_init();
@@ -45,7 +87,7 @@ static void networkLoop(void* args){
     }
     ESP_ERROR_CHECK(err);
 
-    initWiFi();
+    wifi::begin();
     storage::begin();
 
     /** 
@@ -84,17 +126,17 @@ static void networkLoop(void* args){
 
     esp_http_client_config_t config = {.url = url.c_str()};
     for(;;){
-        if(!connectWifi){
-            if(getWiFiStatus() != WIFI_MODE_APSTA){
+        if(!wifi::connect){
+            if(wifi::getMode() != WIFI_MODE_APSTA){
                 auto now = esp_timer_get_time();
                 if(wifiTryConnectTime == 0){
                     wifiTryConnectTime = now;
                 }
-                if(now - wifiTryConnectTime >= 8 * 1000000){
+                if(now - wifiTryConnectTime >= 5 * 1000000){
                     debug("[WiFi] Start AP Mode\n");
                     esp_wifi_set_mode(WIFI_MODE_APSTA);
                 }
-            }else if(startAP){
+            }else if(wifi::beginAP){
                 web::start();
             }
             continue;
@@ -102,7 +144,7 @@ static void networkLoop(void* args){
 
         auto state = doorStateQueue.pop();
 
-        sendPhase = true;
+        sleepDelay = 0xFFFFFFFF;
         while(!esp_websocket_client_is_connected(client)){
             if(client != NULL){
                 continue;
@@ -110,7 +152,9 @@ static void networkLoop(void* args){
             client = esp_websocket_client_init(&websocket_cfg);
             if(esp_websocket_client_start(client) != ESP_OK){
                 client = NULL;
+                continue;
             }
+            esp_websocket_register_events(client, WEBSOCKET_EVENT_DATA, websocketHandler, (void*) client);
         }
 
         uint8_t i = 1;
@@ -130,7 +174,7 @@ static void networkLoop(void* args){
             buffer[i++] = device[j];
         }
         esp_websocket_client_send_with_opcode(client, WS_TRANSPORT_OPCODES_BINARY, buffer, i, portMAX_DELAY);
-        sendPhase = false;
+        sleepDelay = DEEP_SLEEP_DELAY;
     }
 }
 
@@ -143,13 +187,13 @@ static void checkDoor(void* args){
             if(lastReset == -1){
                 lastReset = millis();
             }else if(millis() - lastReset > 5 * 1000){
-                clearWiFiData();
+                wifi::clear();
             }
         }else{
             lastReset = -1;
         }
 
-        if(!connectWifi){
+        if(!wifi::connect){
             continue;
         }
 
@@ -159,15 +203,13 @@ static void checkDoor(void* args){
             lastUpdateTime = millis();
         }
         
-        #if !defined(DEBUG_MODE)
-        if(!sendPhase && millis() - lastUpdateTime > 8 * 1000){
+        if(millis() - lastUpdateTime > sleepDelay){
             debug("[SLEEP] Start Deep Sleep\n");
             rtc_gpio_pullup_en(SWITCH_PIN);
             esp_sleep_enable_ext0_wakeup(SWITCH_PIN, !lastOpenDoor);
 
             esp_deep_sleep_start();
         }
-        #endif
     }
 }
 

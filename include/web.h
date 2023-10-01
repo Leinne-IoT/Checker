@@ -6,6 +6,7 @@
 #include <esp_wifi.h>
 #include <esp_http_server.h>
 
+#include "wifi.h"
 #include "utils.h"
 
 using namespace std;
@@ -154,10 +155,7 @@ static esp_err_t savePage(httpd_req_t* req){
         if(data.first.length() > 0 && data.second.length() > 7){
             httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
 
-            wifi_config_t staConfig = {0};
-            strcpy((char*) staConfig.sta.ssid, data.first.c_str());
-            strcpy((char*) staConfig.sta.password, data.second.c_str());
-            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &staConfig));
+            wifi::setData(data.first, data.second);
             esp_restart();
         }else{
             httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
