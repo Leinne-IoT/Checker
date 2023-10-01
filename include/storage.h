@@ -5,12 +5,12 @@
 
 using namespace std;
 
-static string devicdId = "";
-static nvs_handle_t handle;
-
 namespace storage{
+    static string devicdId = "";
+    static nvs_handle_t nvsHandle;
+
     esp_err_t begin(){
-        esp_err_t res = nvs_open("checker", NVS_READWRITE, &handle);
+        esp_err_t res = nvs_open("checker", NVS_READWRITE, &nvsHandle);
         if(res != ESP_OK){
             //log_e("Unable to open NVS namespace: %d", res);
         }
@@ -19,7 +19,7 @@ namespace storage{
 
     string getString(string key, size_t length){
         char data[length] = {0};
-        esp_err_t err = nvs_get_str(handle, key.c_str(), data, &length);
+        esp_err_t err = nvs_get_str(nvsHandle, key.c_str(), data, &length);
         if(err != ESP_OK){
             //log_e("Failed to load data '%s'. length: %d, error code: %s", key.c_str(), lenData, esp_err_to_name(err));
             return "";
@@ -29,7 +29,7 @@ namespace storage{
 
     string getString(string key){
         uint16_t lenData;
-        esp_err_t err = nvs_get_u16(handle, (key + "$l").c_str(), &lenData);
+        esp_err_t err = nvs_get_u16(nvsHandle, (key + "$l").c_str(), &lenData);
         if(err != ESP_OK){
             //log_e("Failed to load data '%s$l'. length: %d, error code: %s", key.c_str(), lenData, esp_err_to_name(err));
             return "";
@@ -38,10 +38,10 @@ namespace storage{
     }
 
     bool setString(string key, string value, bool saveLength = false){
-        if(saveLength && nvs_set_u16(handle, (key + "$l").c_str(), value.length() + 1) != ESP_OK){
+        if(saveLength && nvs_set_u16(nvsHandle, (key + "$l").c_str(), value.length() + 1) != ESP_OK){
             return false;
         }
-        return nvs_set_str(handle, key.c_str(), value.c_str()) == ESP_OK;
+        return nvs_set_str(nvsHandle, key.c_str(), value.c_str()) == ESP_OK;
     }
 
     string getDeviceId(){

@@ -9,10 +9,10 @@
 
 using namespace std;
 
-static atomic<bool> startAP = false;
-static atomic<bool> connectWifi = false;
+atomic<bool> startAP = false;
+atomic<bool> connectWifi = false;
 
-void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
+static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
     switch(id){
         case WIFI_EVENT_STA_START:
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -28,7 +28,7 @@ void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
     }
 }
 
-void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
+static void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
     connectWifi = true;
     debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip));
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <nvs.h>
-//#include <time.h>
+#include <time.h>
 #include <string>
 #include <sstream>
 #include <esp_random.h>
@@ -37,11 +37,17 @@ inline int64_t millis(){
     return esp_timer_get_time() / 1000LL;
 }
 
-/*inline int64_t getCurrentMillis(){
+inline int64_t getCurrentMillis(){
     timeval now;
     gettimeofday(&now, NULL);
     return now.tv_sec * 1000LL + now.tv_usec / 1000LL;
-}*/
+}
+
+inline int64_t getCurrentMicros(){
+    timeval now;
+    gettimeofday(&now, NULL);
+    return now.tv_sec * 1000000LL + now.tv_usec;
+}
 
 inline void strReplace(string& origin, string replace, string str){
     auto index = origin.find(replace);

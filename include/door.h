@@ -8,23 +8,25 @@ struct DoorState{
     int64_t updateTime;
 };
 
+SafeQueue<DoorState> doorStateQueue;
 RTC_DATA_ATTR bool lastOpenDoor = false;
-static SafeQueue<DoorState> doorStateQueue;
 
-DoorState getDoorState(){
-    return {
-        .open = gpio_get_level(SWITCH_PIN) != 0,
-        .updateTime = millis(),
-    };
-}
+namespace door{
+    DoorState get(){
+        return {
+            .open = gpio_get_level(SWITCH_PIN) != 0,
+            .updateTime = millis(),
+        };
+    }
 
-void checkDoorState(int64_t* lastUpdateTime){
-    auto state = getDoorState();
-    if(lastOpenDoor != state.open){
-        doorStateQueue.push(state);
-        debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
+    void check(int64_t* lastUpdateTime){
+        auto state = get();
+        if(lastOpenDoor != state.open){
+            doorStateQueue.push(state);
+            debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
 
-        lastOpenDoor = state.open;
-        *lastUpdateTime = state.updateTime;
+            lastOpenDoor = state.open;
+            *lastUpdateTime = state.updateTime;
+        }
     }
 }

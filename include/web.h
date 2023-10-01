@@ -96,7 +96,7 @@ R"rawliteral(
 
 httpd_handle_t server = NULL;
 
-pair<string, string> parseParameter(char* data){
+static pair<string, string> parseParameter(char* data){
     string token;
     istringstream iss(data);
     pair<string, string> result = make_pair("", "");
@@ -116,7 +116,7 @@ pair<string, string> parseParameter(char* data){
     return result;
 }
 
-string getIndexPage(bool scan){
+static string getIndexPage(bool scan){
     string index = indexHtml;
 
     uint16_t length = 0;
@@ -142,11 +142,11 @@ string getIndexPage(bool scan){
     return index;
 }
 
-esp_err_t indexPage(httpd_req_t* req){
+static esp_err_t indexPage(httpd_req_t* req){
     return httpd_resp_send(req, getIndexPage(true).c_str(), HTTPD_RESP_USE_STRLEN);
 }
 
-esp_err_t savePage(httpd_req_t* req){
+static esp_err_t savePage(httpd_req_t* req){
     char content[req->content_len + 1] = {0};
     int ret = httpd_req_recv(req, content, req->content_len);
     if(ret > 0){
@@ -158,7 +158,7 @@ esp_err_t savePage(httpd_req_t* req){
             strcpy((char*) staConfig.sta.ssid, data.first.c_str());
             strcpy((char*) staConfig.sta.password, data.second.c_str());
             ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &staConfig));
-            esp_wifi_connect();
+            esp_restart();
         }else{
             httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
         }
@@ -171,43 +171,45 @@ esp_err_t savePage(httpd_req_t* req){
     return ESP_OK;
 }
 
-esp_err_t startWebServer(){
-    if(server != NULL){
-        return ESP_OK;
+namespace web{
+    esp_err_t start(){
+        if(server != NULL){
+            return ESP_OK;
+        }
+
+        debug("[Web] Start Server\n");
+        httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+        config.stack_size = 8192;
+
+        esp_err_t err = httpd_start(&server, &config);
+        if(err == ESP_OK){
+            httpd_uri_t index = {
+                .uri = "/",
+                .method = HTTP_GET,
+                .handler = indexPage,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &index);
+
+            httpd_uri_t saveUri = {
+                .uri = "/save",
+                .method = HTTP_POST,
+                .handler = savePage,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &saveUri);
+        }
+        return err;
     }
 
-    debug("[Web] Start Server\n");
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.stack_size = 8192;
+    esp_err_t stop(){
+        if(server == NULL){
+            return ESP_OK;
+        }
 
-    esp_err_t err = httpd_start(&server, &config);
-    if(err == ESP_OK){
-        httpd_uri_t index = {
-            .uri = "/",
-            .method = HTTP_GET,
-            .handler = indexPage,
-            .user_ctx = NULL
-        };
-        httpd_register_uri_handler(server, &index);
-
-        httpd_uri_t saveUri = {
-            .uri = "/save",
-            .method = HTTP_POST,
-            .handler = savePage,
-            .user_ctx = NULL
-        };
-        httpd_register_uri_handler(server, &saveUri);
+        debug("[Web] Stop Server\n");
+        esp_err_t err = httpd_stop(server);
+        server = NULL;
+        return err;
     }
-    return err;
-}
-
-esp_err_t stopWebServer(){
-    if(server == NULL){
-        return ESP_OK;
-    }
-
-    debug("[Web] Stop Server\n");
-    esp_err_t err = httpd_stop(server);
-    server = NULL;
-    return err;
 }

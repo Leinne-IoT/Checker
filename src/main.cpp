@@ -37,7 +37,7 @@ atomic<bool> sendPhase = false;
 int64_t lastUpdateTime = 0;
 int64_t wifiTryConnectTime = 0;
 
-void networkLoop(void* args){
+static void networkLoop(void* args){
     esp_err_t err = nvs_flash_init();
     if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND){
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -95,7 +95,7 @@ void networkLoop(void* args){
                     esp_wifi_set_mode(WIFI_MODE_APSTA);
                 }
             }else if(startAP){
-                startWebServer();
+                web::start();
             }
             continue;
         }
@@ -134,10 +134,10 @@ void networkLoop(void* args){
     }
 }
 
-void checkDoor(void* args){
+static void checkDoor(void* args){
     int64_t lastReset = -1;
     for(;;){
-        checkDoorState(&lastUpdateTime);
+        door::check(&lastUpdateTime);
         if(gpio_get_level(RESET_PIN) == 0){
             lastUpdateTime = millis();
             if(lastReset == -1){
@@ -154,7 +154,7 @@ void checkDoor(void* args){
         }
 
         if(server != NULL){
-            stopWebServer();
+            web::stop();
             ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
             lastUpdateTime = millis();
         }
@@ -186,7 +186,7 @@ extern "C" void app_main(){
         doorStateQueue.push(state);
         debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
     }else{
-        lastOpenDoor = getDoorState().open;
+        lastOpenDoor = door::get().open;
         debug("[Main] Wake Up Cause: %d\n", cause);
     }
 
