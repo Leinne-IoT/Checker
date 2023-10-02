@@ -23,7 +23,7 @@ namespace door{
         auto state = get();
         if(lastOpenDoor != state.open){
             doorStateQueue.push(state);
-            debug(state.open ? "[%lld] 문 열림\n" : "[%lld] 문 닫힘\n", state.updateTime);
+            debug(state.open ? "[Door] 문 열림 (%d개 대기중)\n" : "[Door] 문 닫힘 (%d개 대기중)\n", doorStateQueue.size() - 1);
 
             lastOpenDoor = state.open;
             *lastUpdateTime = state.updateTime;
