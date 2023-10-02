@@ -27,6 +27,11 @@ public:
 		return q.empty();
 	}
 
+	size_t size(){
+		std::lock_guard<std::mutex> lock(m);
+		return q.size();
+	}
+
 	T pop(){
 		std::unique_lock<std::mutex> lock(m);
 		while(q.empty()){
