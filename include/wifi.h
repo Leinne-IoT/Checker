@@ -13,25 +13,25 @@ namespace wifi{
     atomic<bool> beginAP = false;
     atomic<bool> connect = false;
 
-    static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-        switch(id){
-            case WIFI_EVENT_STA_START:
-            case WIFI_EVENT_STA_DISCONNECTED:
-                esp_wifi_connect();
-                connect = false;
-                break;
-            case WIFI_EVENT_AP_START:
-                beginAP = true;
-                break;
-            case WIFI_EVENT_AP_STOP:
-                beginAP = false;
-                break;
+    static void eventHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
+        if(id == IP_EVENT_STA_GOT_IP){
+            connect = true;
+            debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip));
+        }else{
+            switch(id){
+                case WIFI_EVENT_STA_START:
+                case WIFI_EVENT_STA_DISCONNECTED:
+                    esp_wifi_connect();
+                    connect = false;
+                    break;
+                case WIFI_EVENT_AP_START:
+                    beginAP = true;
+                    break;
+                case WIFI_EVENT_AP_STOP:
+                    beginAP = false;
+                    break;
+            }
         }
-    }
-
-    static void ipHandler(void* arg, esp_event_base_t basename, int32_t id, void* data){
-        connect = true;
-        debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip));
     }
 
     void begin(){
@@ -43,8 +43,8 @@ namespace wifi{
 
         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
         ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-        ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ipHandler, NULL));
-        ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiHandler, NULL));
+        ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &eventHandler, NULL));
+        ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &eventHandler, NULL));
 
         wifi_config_t config = {
             .ap = {
@@ -92,7 +92,6 @@ namespace wifi{
             }
         };
         esp_wifi_set_config(WIFI_IF_AP, &apConfig);
-        esp_restart();
     }
 
     wifi_mode_t getMode(){
