@@ -37,7 +37,7 @@ namespace storage{
         return getString(key, lenData);
     }
 
-    bool setString(string key, string value, bool saveLength = false){
+    bool setString(string key, string value, bool saveLength = true){
         if(saveLength && nvs_set_u16(nvsHandle, (key + "$l").c_str(), value.length() + 1) != ESP_OK){
             return false;
         }
