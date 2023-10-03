@@ -16,6 +16,13 @@ public:
 	SafeQueue(): q(), m(), c(){}
 	~SafeQueue(){}
 
+	void waitPush(){
+		std::unique_lock<std::mutex> lock(m);
+		while(q.empty()){
+			c.wait(lock);
+		}
+	}
+
 	void push(T t){
 		std::lock_guard<std::mutex> lock(m);
 		q.push(t);

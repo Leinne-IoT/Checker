@@ -94,8 +94,18 @@ void hibernate(){
     esp_deep_sleep_start();
 }
 
+void lightSleep(gpio_num_t pin, int level, uint64_t time = 0){
+    debug("[SLEEP] Start light sleep\n");
+    rtc_gpio_pullup_en(pin);
+    esp_sleep_enable_ext0_wakeup(pin, level);
+    if(time > 0){
+        esp_sleep_enable_timer_wakeup(time);
+    }
+    esp_light_sleep_start();
+}
+
 void deepSleep(gpio_num_t pin, int level, uint64_t time = 0){
-    debug("[SLEEP] Start Deep Sleep\n");
+    debug("[SLEEP] Start deep sleep\n");
     rtc_gpio_pullup_en(pin);
     esp_sleep_enable_ext0_wakeup(pin, level);
     if(time > 0){

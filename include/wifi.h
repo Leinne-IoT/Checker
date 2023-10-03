@@ -26,9 +26,11 @@ namespace wifi{
                     break;
                 case WIFI_EVENT_AP_START:
                     beginAP = true;
+                    debug("[WiFi] Start AP Mode\n");
                     break;
                 case WIFI_EVENT_AP_STOP:
                     beginAP = false;
+                    debug("[WiFi] Stop AP Mode\n");
                     break;
             }
         }
