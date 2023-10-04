@@ -24,7 +24,7 @@ namespace ws{
 
     void sendWelcome(){
         auto device = storage::getDeviceId();
-        uint8_t buffer[16] = {0x01, 0x01}; //device type, binary type(welcome)
+        uint8_t buffer[16] = {0x01, 0x01}; //device type, data type(welcome)
         for(uint8_t i = 0; i< device.length(); ++i){
             buffer[2 + i] = device[i];
         }
@@ -32,17 +32,12 @@ namespace ws{
     }
 
     void sendDoorState(DoorState state){
-        uint8_t buffer[6] = {0x01, 0x02}; //device type, binary type(door)
+        uint8_t buffer[6] = {0x01, 0x02}; //device type, data type(door)
         int64_t current = millis() - state.updateTime;
         for(uint8_t byte = 0; byte < 4; ++byte){
             buffer[2 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
         }
-
-        if(state.open){
-            buffer[2] |= 0b10000000;
-        }else{
-            buffer[2] &= 0b01111111;
-        }
+        buffer[2] = state.open ? buffer[2] | 0b10000000 : buffer[2] & 0b01111111;
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
     }
 
