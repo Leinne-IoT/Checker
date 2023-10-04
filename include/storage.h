@@ -49,13 +49,17 @@ namespace storage{
             return devicdId;
         }
 
-        string id = getString("DEVICE_ID", 7);
-        if(id.length() == 6){
+        string id = getString("DEVICE_ID", 11);
+        if(id.length() == 10){
             return devicdId = id;
         }else{
             stringstream stream;
-            for(uint8_t i = 0; i < 6; ++i){
+            for(uint8_t i = 0; i < 5; ++i){
                 stream << (char) random('a', 'z');
+            }
+            stream << '_';
+            for(uint8_t i = 0; i < 4; ++i){
+                stream << (char) random('0', '9');
             }
             setString("DEVICE_ID", devicdId = stream.str(), false);
         }

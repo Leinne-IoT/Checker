@@ -22,10 +22,12 @@
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define RESET_PIN GPIO_NUM_26
 #define SWITCH_PIN GPIO_NUM_25
+#define BUZZER_PIN GPIO_NUM_27
 #define LED_BUILTIN GPIO_NUM_2
 #else
 #define RESET_PIN GPIO_NUM_8
 #define SWITCH_PIN GPIO_NUM_7
+#define BUZZER_PIN GPIO_NUM_9
 #define LED_BUILTIN GPIO_NUM_21
 #endif
 
@@ -39,8 +41,8 @@
 
 using namespace std;
 
+int64_t wifiTryConnectTime = 0;
 atomic<int64_t> lastUpdateTime = 0;
-atomic<uint32_t> sleepDelay = DEEP_SLEEP_DELAY;
 
 static void checkGPIO(void* args){
     int64_t lastReset = -1;
@@ -65,20 +67,42 @@ static void checkGPIO(void* args){
             continue;
         }
 
-        if(server != NULL){
-            web::stop();
+        if(web::stop()){
             ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         }
 
-        if(ws::connectServer && doorStateQueue.empty() && millis() - lastUpdateTime > sleepDelay){
+        if(ws::connectServer && doorStateQueue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
             deepSleep(SWITCH_PIN, !lastOpenDoor);
         }
     }
 }
 
 static void webSocketHandler(void* object, esp_event_base_t base, int32_t eventId, void* eventData){
+    esp_websocket_event_data_t* data = (esp_websocket_event_data_t*) eventData;
     if(eventId == WEBSOCKET_EVENT_CONNECTED){
         lastUpdateTime = millis();
+    }else if(eventId == WEBSOCKET_EVENT_DATA && data->op_code == BINARY){
+        switch(data->data_ptr[0]){
+            case 0x10: // LED LIGHT
+                debug("[WS] LED 점등\n");
+                gpio_set_level(LED_BUILTIN, data->data_ptr[1]);
+                break;
+            case 0x20: // 피에조 부저
+                // TODO: 부저 작동시키기
+                break;
+        }
+    }
+}
+
+static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
+    switch(id){
+        case WIFI_EVENT_STA_START:
+        case WIFI_EVENT_STA_DISCONNECTED:
+            wifiTryConnectTime = millis();
+            break;
+        case WIFI_EVENT_AP_START:
+            web::start();
+            break;
     }
 }
 
@@ -93,18 +117,17 @@ static void networkLoop(void* args){
     storage::begin();
     wifi::begin();
     ws::start(webSocketHandler);
+    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiHandler, NULL);
 
     for(;;){
-        int64_t wifiTryConnectTime = millis();
-        while(!wifi::connect){
+        if(!wifi::connect){
             if(wifi::getMode() != WIFI_MODE_APSTA){
                 auto now = millis();
-                if(now - wifiTryConnectTime >= 5 * 1000){
-                    esp_wifi_set_mode(WIFI_MODE_APSTA);
+                if(now - wifiTryConnectTime >= 6 * 1000){
+                    wifi::setApMode();
                 }
-            }else if(wifi::beginAP){
-                web::start();
             }
+            continue;
         }
         
         int64_t time = millis();
@@ -123,13 +146,14 @@ extern "C" void app_main(){
     gpio_pullup_en(SWITCH_PIN);
     gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);
     gpio_set_direction(SWITCH_PIN, GPIO_MODE_INPUT);
+    gpio_set_direction(BUZZER_PIN, GPIO_MODE_OUTPUT);
     gpio_set_direction(LED_BUILTIN, GPIO_MODE_OUTPUT);
 
     auto cause = esp_sleep_get_wakeup_cause();
     if(cause == ESP_SLEEP_WAKEUP_EXT0){
         DoorState state = {
             .open = lastOpenDoor = !lastOpenDoor,
-            .updateTime = millis(),
+            .updateTime = (uint32_t) millis(),
         };
         doorStateQueue.push(state);
         debug(state.open ? "[Door] 문 열림 (%d개 대기중)\n" : "[Door] 문 닫힘 (%d개 대기중)\n", doorStateQueue.size() - 1);
@@ -140,9 +164,8 @@ extern "C" void app_main(){
 
     TaskHandle_t gpioTask;
     TaskHandle_t networkTask;
-    auto core = esp_cpu_get_core_id();
-    xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &gpioTask, !core);
-    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, core);
+    xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &gpioTask, 1);
+    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 0);
 
     for(;;){
         doorStateQueue.waitPush();

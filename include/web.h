@@ -95,82 +95,82 @@ R"rawliteral(
 </html>
 )rawliteral";
 
-httpd_handle_t server = NULL;
-
-static pair<string, string> parseParameter(char* data){
-    string token;
-    istringstream iss(data);
-    pair<string, string> result = make_pair("", "");
-    while(getline(iss, token, '&')){
-        size_t equalPos = token.find('=');
-        if(equalPos == string::npos){
-            continue;
-        }
-        auto key = token.substr(0, equalPos);
-        if(key == "ssid"){
-            result.first = urlDecode(token.substr(equalPos + 1));
-        }
-        if(key == "password"){
-            result.second = urlDecode(token.substr(equalPos + 1));
-        }
-    }
-    return result;
-}
-
-static string getIndexPage(bool scan){
-    string index = indexHtml;
-
-    uint16_t length = 0;
-    wifi_ap_record_t apInfo[32];
-    if(scan){
-        esp_wifi_scan_start(NULL, true);
-        esp_wifi_scan_get_ap_num(&length);
-        length = MIN(length, 32);
-
-        esp_wifi_scan_get_ap_records(&length, apInfo);
-        esp_wifi_scan_stop();
-    }
-
-    if(length > 0){
-        string ssidInput = "<select name='ssid' style='width: 100%'>";
-        for(uint16_t i = 0; i < length; i++){
-            ssidInput += "<option>" + string((char*) apInfo[i].ssid) + "</option>";
-        }
-        strReplace(index, "${ssid}", ssidInput + "</select>");
-    }else{
-        strReplace(index, "${ssid}", "<input type='text' required maxlength='100' name='ssid'>");
-    }
-    return index;
-}
-
-static esp_err_t indexPage(httpd_req_t* req){
-    return httpd_resp_send(req, getIndexPage(true).c_str(), HTTPD_RESP_USE_STRLEN);
-}
-
-static esp_err_t savePage(httpd_req_t* req){
-    char content[req->content_len + 1] = {0};
-    int ret = httpd_req_recv(req, content, req->content_len);
-    if(ret > 0){
-        auto data = parseParameter(content);
-        if(data.first.length() > 0 && data.second.length() > 7){
-            httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
-
-            wifi::setData(data.first, data.second);
-            esp_restart();
-        }else{
-            httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
-        }
-    }else{
-        if(ret == HTTPD_SOCK_ERR_TIMEOUT){
-            httpd_resp_send_err(req, HTTPD_408_REQ_TIMEOUT, NULL);
-        }
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
 namespace web{
-    esp_err_t start(){
+    httpd_handle_t server = NULL;
+    
+    static pair<string, string> parseParameter(char* data){
+        string token;
+        istringstream iss(data);
+        pair<string, string> result = make_pair("", "");
+        while(getline(iss, token, '&')){
+            size_t equalPos = token.find('=');
+            if(equalPos == string::npos){
+                continue;
+            }
+            auto key = token.substr(0, equalPos);
+            if(key == "ssid"){
+                result.first = urlDecode(token.substr(equalPos + 1));
+            }
+            if(key == "password"){
+                result.second = urlDecode(token.substr(equalPos + 1));
+            }
+        }
+        return result;
+    }
+
+    static string getIndexPage(bool scan){
+        string index = indexHtml;
+
+        uint16_t length = 0;
+        wifi_ap_record_t apInfo[32];
+        if(scan){
+            esp_wifi_scan_start(NULL, true);
+            esp_wifi_scan_get_ap_num(&length);
+            length = MIN(length, 32);
+
+            esp_wifi_scan_get_ap_records(&length, apInfo);
+            esp_wifi_scan_stop();
+        }
+
+        if(length > 0){
+            string ssidInput = "<select name='ssid' style='width: 100%'>";
+            for(uint16_t i = 0; i < length; i++){
+                ssidInput += "<option>" + string((char*) apInfo[i].ssid) + "</option>";
+            }
+            strReplace(index, "${ssid}", ssidInput + "</select>");
+        }else{
+            strReplace(index, "${ssid}", "<input type='text' required maxlength='100' name='ssid'>");
+        }
+        return index;
+    }
+
+    static esp_err_t indexPage(httpd_req_t* req){
+        return httpd_resp_send(req, getIndexPage(true).c_str(), HTTPD_RESP_USE_STRLEN);
+    }
+
+    static esp_err_t savePage(httpd_req_t* req){
+        char content[req->content_len + 1] = {0};
+        int ret = httpd_req_recv(req, content, req->content_len);
+        if(ret > 0){
+            auto data = parseParameter(content);
+            if(data.first.length() > 0 && data.second.length() > 7){
+                httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
+
+                wifi::setData(data.first, data.second);
+                esp_restart();
+            }else{
+                httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
+            }
+        }else{
+            if(ret == HTTPD_SOCK_ERR_TIMEOUT){
+                httpd_resp_send_err(req, HTTPD_408_REQ_TIMEOUT, NULL);
+            }
+            return ESP_FAIL;
+        }
+        return ESP_OK;
+    }
+
+    bool start(){
         if(server != NULL){
             return ESP_OK;
         }
@@ -196,18 +196,19 @@ namespace web{
                 .user_ctx = NULL
             };
             httpd_register_uri_handler(server, &saveUri);
+            return true;
         }
-        return err;
+        return false;
     }
 
-    esp_err_t stop(){
+    bool stop(){
         if(server == NULL){
-            return ESP_OK;
+            return false;
         }
 
         debug("[Web] Stop Server\n");
-        esp_err_t err = httpd_stop(server);
+        httpd_stop(server);
         server = NULL;
-        return err;
+        return true;
     }
 }

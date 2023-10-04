@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <driver/gpio.h>
 #include <esp_http_client.h>
 #include <esp_websocket_client.h>
@@ -18,27 +19,31 @@ typedef enum{
 } websocket_opcode_t;
 
 namespace ws{
-    bool connectServer = false;
+    atomic<bool> connectServer = false;
     esp_websocket_client_handle_t webSocket = NULL;
 
-    void sendDoorState(DoorState state){
-        uint8_t len = 3;
-        uint8_t buffer[32] = {0x00, 0x02, state.open};
-        int64_t current = millis() - state.updateTime;
-        for(uint8_t max = len + 8; len < max; ++len){
-            buffer[len] = (current >> (8 * (max - len - 1))) & 0xFF;
+    void sendWelcome(){
+        auto device = storage::getDeviceId();
+        uint8_t buffer[16] = {0x01, 0x01}; //device type, binary type(welcome)
+        for(uint8_t i = 0; i< device.length(); ++i){
+            buffer[2 + i] = device[i];
         }
-        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, len, portMAX_DELAY);
+        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, device.length() + 2, portMAX_DELAY);
     }
 
-    void sendWelcome(){
-        uint8_t len = 2;
-        uint8_t buffer[32] = {0x00, 0x01};
-        auto device = storage::getDeviceId();
-        for(uint8_t first = len, max = len + device.length(); len < max; ++len){
-            buffer[len] = device[len - first];
+    void sendDoorState(DoorState state){
+        uint8_t buffer[6] = {0x01, 0x02}; //device type, binary type(door)
+        int64_t current = millis() - state.updateTime;
+        for(uint8_t byte = 0; byte < 4; ++byte){
+            buffer[2 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
         }
-        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, len, portMAX_DELAY);
+
+        if(state.open){
+            buffer[2] |= 0b10000000;
+        }else{
+            buffer[2] &= 0b01111111;
+        }
+        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
     }
 
     bool isConnected(){
@@ -55,26 +60,17 @@ namespace ws{
             switch(data->op_code){
                 case STRING:{
                     if(connectServer){
-                        break;
+                        return;
                     }
                     string device(data->data_ptr, data->data_len);
                     if(storage::getDeviceId() == device){
                         connectServer = true;
                         debug("[WS] Connect successful.\n");
                     }else{
-                        debug("[WS] Connect failed.");
+                        debug("[WS] FAILED. device: %s, receive: %s, len: %d\n", storage::getDeviceId().c_str(), device.c_str(), data->data_len);
                     }
                     break;
                 }
-                case BINARY:
-                    // TODO: 웹소켓 데이터 수신으로 LED, 부저 등 제어
-                    switch(data->data_ptr[0]){
-                        case 0x10: // LED LIGHT
-                            gpio_set_level(LED_BUILTIN, data->data_ptr[1]);
-                            debug("[WS] LED 점등\n");
-                            break;
-                    }
-                    break;
                 case QUIT:
                     debug("[WS] Received closed message with code=%d\n", 256 * data->data_ptr[0] + data->data_ptr[1]);
                     break;

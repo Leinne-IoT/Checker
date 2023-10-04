@@ -4,8 +4,8 @@
 #include "safe_queue.h"
 
 struct DoorState{
-    bool open;
-    int64_t updateTime;
+    uint32_t open:1;
+    uint32_t updateTime:31;
 };
 
 SafeQueue<DoorState> doorStateQueue;
@@ -15,7 +15,7 @@ namespace door{
     DoorState state(){
         return {
             .open = gpio_get_level(SWITCH_PIN) != 0,
-            .updateTime = millis(),
+            .updateTime = (uint32_t) millis(),
         };
     }
 
