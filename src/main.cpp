@@ -24,6 +24,7 @@
 #define RESET_PIN GPIO_NUM_26
 #define SWITCH_PIN GPIO_NUM_25
 #define BUZZER_PIN GPIO_NUM_27
+#define BATTERY_PIN GPIO_NUM_0
 #define LED_BUILTIN GPIO_NUM_2
 #else
 #define RESET_PIN GPIO_NUM_8
@@ -78,10 +79,12 @@ static void webSocketHandler(void* object, esp_event_base_t base, int32_t eventI
     }else if(eventId == WEBSOCKET_EVENT_DATA && data->op_code == BINARY){
         switch(data->data_ptr[0]){
             case 0x10: // LED LIGHT
+                lastUpdateTime = millis();
                 debug("[WS] LED 점등\n");
                 gpio_set_level(LED_BUILTIN, data->data_ptr[1]);
                 break;
             case 0x20: // 피에조 부저
+                lastUpdateTime = millis();
                 // TODO: 부저 작동시키기
                 break;
         }
