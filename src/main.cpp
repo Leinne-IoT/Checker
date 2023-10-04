@@ -1,5 +1,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/queue.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
 #include <esp_sleep.h>
@@ -28,6 +29,7 @@
 #define RESET_PIN GPIO_NUM_8
 #define SWITCH_PIN GPIO_NUM_7
 #define BUZZER_PIN GPIO_NUM_9
+#define BATTERY_PIN GPIO_NUM_0
 #define LED_BUILTIN GPIO_NUM_21
 #endif
 
@@ -63,14 +65,6 @@ static void checkGPIO(void* args){
             lastReset = -1;
         }
 
-        if(!wifi::connect){
-            continue;
-        }
-
-        if(web::stop()){
-            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        }
-
         if(ws::connectServer && doorStateQueue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
             deepSleep(SWITCH_PIN, !lastOpenDoor);
         }
@@ -95,14 +89,20 @@ static void webSocketHandler(void* object, esp_event_base_t base, int32_t eventI
 }
 
 static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-    switch(id){
-        case WIFI_EVENT_STA_START:
-        case WIFI_EVENT_STA_DISCONNECTED:
-            wifiTryConnectTime = millis();
-            break;
-        case WIFI_EVENT_AP_START:
-            web::start();
-            break;
+    if(id == IP_EVENT_STA_GOT_IP){
+        if(web::stop()){
+            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        }
+    }else{
+        switch(id){
+            case WIFI_EVENT_STA_START:
+            case WIFI_EVENT_STA_DISCONNECTED:
+                wifiTryConnectTime = millis();
+                break;
+            case WIFI_EVENT_AP_START:
+                web::start();
+                break;
+        }
     }
 }
 
@@ -118,6 +118,7 @@ static void networkLoop(void* args){
     wifi::begin();
     ws::start(webSocketHandler);
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiHandler, NULL);
+    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiHandler, NULL);
 
     for(;;){
         if(!wifi::connect){
