@@ -99,7 +99,7 @@ static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data
     }else{
         switch(id){
             case WIFI_EVENT_STA_START:
-            case WIFI_EVENT_STA_DISCONNECTED:
+            //case WIFI_EVENT_STA_DISCONNECTED:
                 wifiTryConnectTime = millis();
                 break;
             case WIFI_EVENT_AP_START:
@@ -125,11 +125,11 @@ static void networkLoop(void* args){
 
     for(;;){
         if(!wifi::connect){
-            if(wifi::getMode() != WIFI_MODE_APSTA){
-                auto now = millis();
-                if(now - wifiTryConnectTime >= 6 * 1000){
-                    wifi::setApMode();
-                }
+            if(
+                wifi::getMode() != WIFI_MODE_APSTA &&
+                millis() - wifiTryConnectTime >= 6 * 1000
+            ){
+                wifi::setApMode();
             }
             continue;
         }
