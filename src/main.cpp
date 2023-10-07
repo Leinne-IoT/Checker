@@ -60,12 +60,10 @@ static void checkGPIO(void* args){
                 wifi::clear();
                 esp_restart();
             }
-        }else{
-            if(millis() - lastReset < 1000){
-                lastReset = -1;
-            }else{
-                esp_restart();
-            }
+        }else if(millis() - lastReset < 300){
+            lastReset = -1;
+        }else if(lastReset != -1){
+            esp_restart();
         }
 
         if(ws::connectServer && door::queue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
