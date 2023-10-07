@@ -52,8 +52,10 @@ namespace ws{
         if(eventId == WEBSOCKET_EVENT_CONNECTED){
             sendWelcome();
         }else if(eventId == WEBSOCKET_EVENT_DISCONNECTED || eventId == WEBSOCKET_EVENT_ERROR){
+            if(connectServer){
+                debug("[WS] Disconnected WebSocket\n");
+            }
             connectServer = false;
-            debug("[WS] Disconnected WebSocket\n");
         }else if(eventId == WEBSOCKET_EVENT_DATA && data->op_code == STRING && !connectServer){
             string device(data->data_ptr, data->data_len);
             if(storage::getDeviceId() == device){
