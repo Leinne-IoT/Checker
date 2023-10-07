@@ -64,8 +64,8 @@ static void checkGPIO(void* args){
             lastReset = -1;
         }
 
-        if(ws::connectServer && doorStateQueue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
-            deepSleep(SWITCH_PIN, !lastOpenDoor);
+        if(ws::connectServer && door::queue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
+            deepSleep(SWITCH_PIN, !door::lastState);
         }
     }
 }
@@ -136,25 +136,21 @@ static void networkLoop(void* args){
 }
 
 extern "C" void app_main(){
-    gpio_pullup_en(RESET_PIN);
     gpio_pullup_en(SWITCH_PIN);
-    gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);
     gpio_set_direction(SWITCH_PIN, GPIO_MODE_INPUT);
-    gpio_set_direction(BUZZER_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_direction(LED_BUILTIN, GPIO_MODE_OUTPUT);
 
     auto cause = esp_sleep_get_wakeup_cause();
     if(cause == ESP_SLEEP_WAKEUP_EXT0){
-        DoorState state = {
-            .open = lastOpenDoor = !lastOpenDoor,
-            .updateTime = (uint32_t) millis(),
-        };
-        doorStateQueue.push(state);
-        debug(state.open ? "[Door] 문 열림 (%d개 대기중)\n" : "[Door] 문 닫힘 (%d개 대기중)\n", doorStateQueue.size() - 1);
+        door::check(!door::lastState);
     }else{
-        lastOpenDoor = door::state().open;
+        door::init();
         debug("[Main] Wake Up Cause: %d\n", cause);
     }
+
+    gpio_pullup_en(RESET_PIN);
+    gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);
+    gpio_set_direction(BUZZER_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED_BUILTIN, GPIO_MODE_OUTPUT);
 
     TaskHandle_t gpioTask;
     TaskHandle_t networkTask;
@@ -162,10 +158,10 @@ extern "C" void app_main(){
     xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 0);
 
     for(;;){
-        doorStateQueue.waitPush();
+        door::queue.waitPush();
         while(!ws::isConnected() || !ws::connectServer);
         do{
-            ws::sendDoorState(doorStateQueue.pop());
-        }while(!doorStateQueue.empty());
+            ws::sendDoorState(door::queue.pop());
+        }while(!door::queue.empty());
     }
 }
