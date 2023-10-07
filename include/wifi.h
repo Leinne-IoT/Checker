@@ -19,16 +19,16 @@ namespace wifi{
         }else{
             switch(id){
                 case WIFI_EVENT_STA_START:
-                    printf("[WiFi] Start WiFi\n");
+                    debug("[WiFi] Start WiFi\n");
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_STA_DISCONNECTED:
-                    printf("[WiFi] Disconnected WiFi\n");
+                    debug("[WiFi] Disconnected WiFi\n");
                     connect = false;
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_AP_START:
-                    printf("[WiFi] Start AP\n");
+                    debug("[WiFi] Start AP\n");
                     break;
             }
         }
@@ -49,7 +49,7 @@ namespace wifi{
     }
 
     void setApMode(){
-        printf("[WiFi] Ap Mode Start\n");
+        debug("[WiFi] Ap Mode Start\n");
         esp_netif_create_default_wifi_ap();
         wifi_config_t config = {
             .ap = {
