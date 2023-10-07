@@ -68,7 +68,7 @@ namespace ws{
     void start(esp_event_handler_t handler){
         auto url = storage::getString("websocket_url");
         if(url.find_first_of("ws") == string::npos){
-            storage::setString("websocket_url", url = "ws://leinne.net:33877/");
+            storage::setString("websocket_url", url = DEFAULT_WEBSOCKET_URL);
         }
 
         esp_websocket_client_config_t websocket_cfg = {

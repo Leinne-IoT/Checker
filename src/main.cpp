@@ -17,6 +17,7 @@
 #define DEEP_SLEEP_DELAY 15000
 #endif
 
+#define DEFAULT_WEBSOCKET_URL "ws://leinne.net:33877/"
 
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define RESET_PIN GPIO_NUM_26
