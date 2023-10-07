@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tuple>
 #include <string>
 #include <utility>
 #include <sstream>
@@ -8,6 +9,7 @@
 
 #include "wifi.h"
 #include "utils.h"
+#include "storage.h"
 
 using namespace std;
 
@@ -52,7 +54,11 @@ R"rawliteral(
                 <td><input type="password" required minlength="8" maxlength="100" name="password"></td>
             </tr>
             <tr>
-                <td colspan='2'><center><input style="width: 50%; font-weight: bold" type="submit" value="Save Data"></center></td>
+                <td>Custom WebSocket URL</td>
+                <td><input type="test" required name="server_url"></td>
+            </tr>
+            <tr>
+                <td colspan='2'><center><input style="width: 50%; font-weight: bold" type="submit" value="Submit"></center></td>
             </tr>
         </table>
     </form>
@@ -98,10 +104,10 @@ R"rawliteral(
 namespace web{
     httpd_handle_t server = NULL;
     
-    static pair<string, string> parseParameter(char* data){
+    static tuple<string, string, string> parseParameter(char* data){
         string token;
         istringstream iss(data);
-        pair<string, string> result = make_pair("", "");
+        tuple<string, string, string> result("", "", "");
         while(getline(iss, token, '&')){
             size_t equalPos = token.find('=');
             if(equalPos == string::npos){
@@ -109,10 +115,13 @@ namespace web{
             }
             auto key = token.substr(0, equalPos);
             if(key == "ssid"){
-                result.first = urlDecode(token.substr(equalPos + 1));
+                get<0>(result) = urlDecode(token.substr(equalPos + 1));
             }
             if(key == "password"){
-                result.second = urlDecode(token.substr(equalPos + 1));
+                get<1>(result) = urlDecode(token.substr(equalPos + 1));
+            }
+            if(key == "sever_url"){
+                get<2>(result) = urlDecode(token.substr(equalPos + 1));
             }
         }
         return result;
@@ -152,11 +161,16 @@ namespace web{
         char content[req->content_len + 1] = {0};
         int ret = httpd_req_recv(req, content, req->content_len);
         if(ret > 0){
-            auto data = parseParameter(content);
-            if(data.first.length() > 0 && data.second.length() > 7){
+            string ssid, password, url;
+            tie(ssid, password, url) = parseParameter(content);
+            if(ssid.length() > 0 && password.length() > 7){
                 httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-                wifi::setData(data.first, data.second);
+                wifi::setData(ssid, password);
+                if(url.find_first_of("ws") != string::npos){
+                    storage::setString("websocket_url", url);
+                }
                 esp_restart();
             }else{
                 httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
