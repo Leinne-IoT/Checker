@@ -90,12 +90,10 @@ static void webSocketHandler(void* object, esp_event_base_t base, int32_t eventI
 }
 
 static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
-    if(id == IP_EVENT_STA_GOT_IP){
-        if(web::stop()){
-            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        }
-    }else{
+    if(id == WIFI_EVENT_AP_START){
         web::start();
+    }else if(web::stop()){
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     }
 }
 
@@ -115,18 +113,18 @@ static void networkLoop(void* args){
     esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_AP_START, &wifiHandler, NULL);
 
     for(;;){
-        int64_t wifiTryConnectTime = 0;
+        int64_t time = millis();
         while(!wifi::connect){
             if(
                 wifi::getMode() != WIFI_MODE_APSTA &&
-                millis() - wifiTryConnectTime >= 6 * 1000
+                millis() - time >= 6 * 1000
             ){
                 wifi::setApMode();
             }
             continue;
         }
         
-        int64_t time = millis();
+        time = millis();
         while(!ws::connectServer){
             if(!ws::isConnected() || millis() - time < 500){
                 continue;
