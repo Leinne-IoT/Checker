@@ -29,6 +29,7 @@ namespace ws{
             buffer[2 + i] = device[i];
         }
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, device.length() + 2, portMAX_DELAY);
+        debug("[WS] Send welcome message\n");
     }
 
     void sendDoorState(DoorState state){
@@ -39,6 +40,7 @@ namespace ws{
         }
         buffer[2] = state.open ? buffer[2] | 0b10000000 : buffer[2] & 0b01111111;
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
+        debug("[WS] Send door state(state: %s)\n", state.open ? "open" : "close");
     }
 
     bool isConnected(){
@@ -51,24 +53,14 @@ namespace ws{
             sendWelcome();
         }else if(eventId == WEBSOCKET_EVENT_DISCONNECTED || eventId == WEBSOCKET_EVENT_ERROR){
             connectServer = false;
-        }else if(eventId == WEBSOCKET_EVENT_DATA){
-            switch(data->op_code){
-                case STRING:{
-                    if(connectServer){
-                        return;
-                    }
-                    string device(data->data_ptr, data->data_len);
-                    if(storage::getDeviceId() == device){
-                        connectServer = true;
-                        debug("[WS] Connect successful.\n");
-                    }else{
-                        debug("[WS] FAILED. device: %s, receive: %s, len: %d\n", storage::getDeviceId().c_str(), device.c_str(), data->data_len);
-                    }
-                    break;
-                }
-                case QUIT:
-                    debug("[WS] Received closed message with code=%d\n", 256 * data->data_ptr[0] + data->data_ptr[1]);
-                    break;
+            debug("[WS] Disconnected WebSocket\n");
+        }else if(eventId == WEBSOCKET_EVENT_DATA && data->op_code == STRING && !connectServer){
+            string device(data->data_ptr, data->data_len);
+            if(storage::getDeviceId() == device){
+                connectServer = true;
+                debug("[WS] Connect successful.\n");
+            }else{
+                debug("[WS] FAILED. device: %s, receive: %s, len: %d\n", storage::getDeviceId().c_str(), device.c_str(), data->data_len);
             }
         }
     }
