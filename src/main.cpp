@@ -1,7 +1,5 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/queue.h>
-#include <esp_timer.h>
 #include <nvs_flash.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
@@ -44,7 +42,6 @@
 
 using namespace std;
 
-int64_t wifiTryConnectTime = 0;
 atomic<int64_t> lastUpdateTime = 0;
 
 static void checkGPIO(void* args){
@@ -97,15 +94,7 @@ static void wifiHandler(void* arg, esp_event_base_t base, int32_t id, void* data
             ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         }
     }else{
-        switch(id){
-            case WIFI_EVENT_STA_START:
-            //case WIFI_EVENT_STA_DISCONNECTED:
-                wifiTryConnectTime = millis();
-                break;
-            case WIFI_EVENT_AP_START:
-                web::start();
-                break;
-        }
+        web::start();
     }
 }
 
@@ -120,11 +109,13 @@ static void networkLoop(void* args){
     storage::begin();
     wifi::begin();
     ws::start(webSocketHandler);
-    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiHandler, NULL);
+
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiHandler, NULL);
+    esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_AP_START, &wifiHandler, NULL);
 
     for(;;){
-        if(!wifi::connect){
+        int64_t wifiTryConnectTime = 0;
+        while(!wifi::connect){
             if(
                 wifi::getMode() != WIFI_MODE_APSTA &&
                 millis() - wifiTryConnectTime >= 6 * 1000
