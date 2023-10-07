@@ -13,17 +13,21 @@ namespace wifi{
     atomic<bool> connect = false;
 
     static void eventHandler(void* arg, esp_event_base_t base, int32_t id, void* data){
+        static int64_t start = -1;
         if(id == IP_EVENT_STA_GOT_IP){
             connect = true;
-            debug("[WiFi] 아이피: " IPSTR "\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip));
+            debug("[WiFi] 아이피: " IPSTR ", time: %lldms\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip), millis() - start);
         }else{
             switch(id){
                 case WIFI_EVENT_STA_START:
                     debug("[WiFi] Start WiFi\n");
+                    start = millis();
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_STA_DISCONNECTED:
-                    debug("[WiFi] Disconnected WiFi\n");
+                    if(connect){
+                        debug("[WiFi] Disconnected WiFi\n");
+                    }
                     connect = false;
                     esp_wifi_connect();
                     break;
