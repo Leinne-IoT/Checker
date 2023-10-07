@@ -56,12 +56,16 @@ static void checkGPIO(void* args){
             lastUpdateTime = millis();
             if(lastReset == -1){
                 lastReset = millis();
-            }else if(millis() - lastReset > 5 * 1000){
+            }else if(millis() - lastReset > 8 * 1000){
                 wifi::clear();
                 esp_restart();
             }
         }else{
-            lastReset = -1;
+            if(millis() - lastReset < 1000){
+                lastReset = -1;
+            }else{
+                esp_restart();
+            }
         }
 
         if(ws::connectServer && door::queue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
