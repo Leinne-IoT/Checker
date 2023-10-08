@@ -24,22 +24,22 @@ namespace ws{
 
     void sendWelcome(){
         auto device = storage::getDeviceId();
-        uint8_t buffer[16] = {0x01, 0x01}; //device type, data type(welcome)
+        uint8_t buffer[16] = {0x01, 0x01, getBatteryLevel()}; //{device type, data type, battery level}
         for(uint8_t i = 0; i< device.length(); ++i){
-            buffer[2 + i] = device[i];
+            buffer[3 + i] = device[i];
         }
-        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, device.length() + 2, portMAX_DELAY);
+        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, device.length() + 3, portMAX_DELAY);
         debug("[WS] Send welcome message\n");
     }
 
     void sendDoorState(DoorState state){
-        uint8_t buffer[6] = {0x01, 0x02}; //device type, data type(door)
+        uint8_t buffer[7] = {0x01, 0x02, getBatteryLevel()}; //{device type, data type, open:1 battery level:7}
+        buffer[2] = state.open ? buffer[2] | 0b10000000 : buffer[2] & 0b01111111;
         int64_t current = millis() - state.updateTime;
         for(uint8_t byte = 0; byte < 4; ++byte){
-            buffer[2 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
+            buffer[3 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
         }
-        buffer[2] = state.open ? buffer[2] | 0b10000000 : buffer[2] & 0b01111111;
-        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
+        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 7, portMAX_DELAY);
         debug("[WS] Send door state(state: %s)\n", state.open ? "open" : "close");
     }
 

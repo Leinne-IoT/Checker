@@ -15,7 +15,8 @@ using namespace std;
 #define debug(fmt, args...)
 #endif
 
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 inline uint32_t random(uint32_t max){
     if(max == 0){
@@ -30,6 +31,13 @@ inline uint32_t random(uint32_t min, uint32_t max){
         return min;
     }
     return random(max - min) + min;
+}
+
+inline uint8_t getBatteryLevel(){
+    // TODO: check battery level
+    //uint8_t calculate = 0;
+    //return MIN(100, MAX(0, calculate));
+    return random(1, 10) * 10;
 }
 
 inline int64_t millis(){
@@ -56,7 +64,7 @@ inline void strReplace(string& origin, string replace, string str){
     origin.replace(index, replace.length(), str);
 }
 
-inline string urlDecode(const string& encoded){
+string urlDecode(const string& encoded){
     ostringstream decoded;
     for(size_t i = 0; i < encoded.length(); ++i){
         if(encoded[i] == '%'){
@@ -78,6 +86,26 @@ inline string urlDecode(const string& encoded){
     return decoded.str();
 }
 
+inline void lightSleep(gpio_num_t pin, int level, uint64_t time = 0){
+    debug("[SLEEP] Start light sleep\n");
+    rtc_gpio_pullup_en(pin);
+    esp_sleep_enable_ext0_wakeup(pin, level);
+    if(time > 0){
+        esp_sleep_enable_timer_wakeup(time);
+    }
+    esp_light_sleep_start();
+}
+
+inline void deepSleep(gpio_num_t pin, int level, uint64_t time = 0){
+    debug("[SLEEP] Start deep sleep\n");
+    rtc_gpio_pullup_en(pin);
+    esp_sleep_enable_ext0_wakeup(pin, level);
+    if(time > 0){
+        esp_sleep_enable_timer_wakeup(time);
+    }
+    esp_deep_sleep_start();
+}
+
 void hibernate(){
     esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
 
@@ -92,25 +120,5 @@ void hibernate(){
     #if SOC_PM_SUPPORT_RTC_FAST_MEM_PD
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
     #endif
-    esp_deep_sleep_start();
-}
-
-void lightSleep(gpio_num_t pin, int level, uint64_t time = 0){
-    debug("[SLEEP] Start light sleep\n");
-    rtc_gpio_pullup_en(pin);
-    esp_sleep_enable_ext0_wakeup(pin, level);
-    if(time > 0){
-        esp_sleep_enable_timer_wakeup(time);
-    }
-    esp_light_sleep_start();
-}
-
-void deepSleep(gpio_num_t pin, int level, uint64_t time = 0){
-    debug("[SLEEP] Start deep sleep\n");
-    rtc_gpio_pullup_en(pin);
-    esp_sleep_enable_ext0_wakeup(pin, level);
-    if(time > 0){
-        esp_sleep_enable_timer_wakeup(time);
-    }
     esp_deep_sleep_start();
 }
