@@ -53,7 +53,6 @@ namespace wifi{
     }
 
     void setApMode(){
-        debug("[WiFi] Ap Mode Start\n");
         esp_netif_create_default_wifi_ap();
         wifi_config_t config = {
             .ap = {
@@ -61,10 +60,11 @@ namespace wifi{
                 .password = "",
                 .ssid_len = 7,
                 .authmode = WIFI_AUTH_OPEN,
+                .max_connection = 2,
             }
         };
-        esp_wifi_set_config(WIFI_IF_AP, &config);
-        esp_wifi_set_mode(WIFI_MODE_APSTA);
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &config));
     }
 
     void setData(string ssid, string password){
