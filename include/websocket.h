@@ -19,6 +19,7 @@ typedef enum{
 } websocket_opcode_t;
 
 namespace ws{
+    atomic<bool> sendPhase = false;
     atomic<bool> connectServer = false;
     esp_websocket_client_handle_t webSocket = NULL;
 
@@ -33,14 +34,29 @@ namespace ws{
     }
 
     void sendDoorState(DoorState state){
+        sendPhase = true;
+        debug("[WS] Send door state(state: %s)\n", state.open ? "open" : "close");
         uint8_t buffer[7] = {0x01, 0x02, getBatteryLevel()}; //{device type, data type, open:1 battery level:7}
         buffer[2] = state.open ? buffer[2] | 0b10000000 : buffer[2] & 0b01111111;
-        int64_t current = millis() - state.updateTime;
-        for(uint8_t byte = 0; byte < 4; ++byte){
-            buffer[3 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
-        }
-        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 7, portMAX_DELAY);
-        debug("[WS] Send door state(state: %s)\n", state.open ? "open" : "close");
+        uint8_t count = 0;
+        int64_t delay = 0;
+        do{
+            if(millis() - delay < 1000){
+                continue;
+            }
+
+            if(++count > 3){
+                debug("[WS] Send failed.\n");
+                return;
+            }
+            delay = millis();
+            int64_t current = millis() - state.updateTime;
+            for(uint8_t byte = 0; byte < 4; ++byte){
+                buffer[3 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
+            }
+            esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 7, portMAX_DELAY);
+        }while(sendPhase);
+        debug("[WS] Send successful.\n");
     }
 
     bool isConnected(){
@@ -56,13 +72,17 @@ namespace ws{
                 debug("[WS] Disconnected WebSocket\n");
             }
             connectServer = false;
-        }else if(eventId == WEBSOCKET_EVENT_DATA && data->op_code == STRING && !connectServer){
-            string device(data->data_ptr, data->data_len);
-            if(storage::getDeviceId() == device){
-                connectServer = true;
-                debug("[WS] Connect successful.\n");
-            }else{
-                debug("[WS] FAILED. device: %s, receive: %s, len: %d\n", storage::getDeviceId().c_str(), device.c_str(), data->data_len);
+        }else if(eventId == WEBSOCKET_EVENT_DATA){
+            if(data->op_code == STRING && !connectServer){
+                string device(data->data_ptr, data->data_len);
+                if(storage::getDeviceId() == device){
+                    connectServer = true;
+                    debug("[WS] Connect successful.\n");
+                }else{
+                    debug("[WS] FAILED. device: %s, receive: %s, len: %d\n", storage::getDeviceId().c_str(), device.c_str(), data->data_len);
+                }
+            }else if(data->op_code == BINARY){
+                sendPhase = false;
             }
         }
     }
