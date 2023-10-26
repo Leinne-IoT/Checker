@@ -10,30 +10,38 @@ struct DoorState{
 
 namespace door{
     SafeQueue<DoorState> queue;
+
+    int64_t lastUpdate = 0;
     RTC_DATA_ATTR bool lastState = false;
 
     inline int state(){
         return gpio_get_level(SWITCH_PIN) != 0;
     }
 
-    inline void init(){
-        lastState = state();
-    }
-
-    inline bool check(bool open){
-        if(lastState == open){
+    inline bool update(bool open){
+        auto current = millis();
+        if(lastState == open || current - lastUpdate < 1000){
             return false;
         }
         lastState = open;
+        lastUpdate = current;
         queue.push({
             .open = open,
-            .updateTime = (uint32_t) millis(),
+            .updateTime = (uint32_t) current,
         });
         debug(open ? "[Door] 문 열림 (queue size: %d)\n" : "[Door] 문 닫힘 (queue size: %d)\n", queue.size());
         return true;
     }
 
-    inline bool check(){
-        return check(state());
+    inline bool update(){
+        return update(state());
+    }
+
+    inline void init(bool sleep = false){
+        if(sleep){
+            update(!lastState);
+        }else{
+            lastState = state();
+        }
     }
 }

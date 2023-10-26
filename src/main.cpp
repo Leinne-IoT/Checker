@@ -49,7 +49,7 @@ atomic<int64_t> lastUpdateTime = 0;
 static void checkGPIO(void* args){
     int64_t lastReset = -1;
     for(;;){
-        if(door::check()){
+        if(door::update()){
             lastUpdateTime = millis();
         }
 
@@ -144,12 +144,8 @@ extern "C" void app_main(){
     gpio_set_direction(SWITCH_PIN, GPIO_MODE_INPUT);
 
     auto cause = esp_sleep_get_wakeup_cause();
-    if(cause == ESP_SLEEP_WAKEUP_EXT0){
-        door::check(!door::lastState);
-    }else{
-        door::init();
-        debug("[Main] Wake Up Cause: %d\n", cause);
-    }
+    debug("[Main] Wake Up Cause: %d\n", cause);
+    door::init(cause == ESP_SLEEP_WAKEUP_EXT0);
 
     gpio_pullup_en(RESET_PIN);
     gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);
