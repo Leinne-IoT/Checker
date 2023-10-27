@@ -3,7 +3,6 @@
 #include <nvs_flash.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
-#include <ArduinoJson.h>
 #include <driver/ledc.h>
 #include <driver/rtc_io.h>
 #include <esp_http_client.h>
