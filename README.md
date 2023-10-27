@@ -21,6 +21,8 @@ ESP32를 활용한 문 열림 감지 IoT 기기입니다.
 * [x] **WebSocket 데이터 송/수신**
 
 ## FAQ
+### "esp_websocket_client.h"가 없다고 떠요
+* [websocket-library](https://components.espressif.com/components/espressif/esp_websocket_client)를 lib폴더에 넣어주세요
 ### ESP8266으로는 불가능할까요?  
 다음과 같은 이유로 비추천합니다
 * 깊은 잠(Deep Sleep Mode)에서 GPIO로(RTC wake up) 깨울 수 없음
