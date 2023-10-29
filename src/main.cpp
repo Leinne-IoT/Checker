@@ -60,7 +60,7 @@ static void checkGPIO(void* args){
                 wifi::clear();
                 esp_restart();
             }
-        }else if(millis() - lastReset < 300){
+        }else if(millis() - lastReset < 150){
             lastReset = -1;
         }else if(lastReset != -1){
             esp_restart();
