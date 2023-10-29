@@ -9,12 +9,6 @@
 
 using namespace std;
 
-#ifdef DEBUG_MODE
-#define debug(fmt, args...) printf(fmt, ##args)
-#else
-#define debug(fmt, args...)
-#endif
-
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -64,30 +58,7 @@ inline void strReplace(string& origin, string replace, string str){
     origin.replace(index, replace.length(), str);
 }
 
-string urlDecode(const string& encoded){
-    ostringstream decoded;
-    for(size_t i = 0; i < encoded.length(); ++i){
-        if(encoded[i] == '%'){
-            if(i + 2 < encoded.length()){
-                int decoded_char;
-                char hexStr[3] = {encoded[i + 1], encoded[i + 2], '\0'};
-                istringstream(hexStr) >> hex >> decoded_char;
-                decoded << static_cast<char>(decoded_char);
-                i += 2;
-            }else{
-                return "";
-            }
-        }else if(encoded[i] == '+'){
-            decoded << ' ';
-        }else{
-            decoded << encoded[i];
-        }
-    }
-    return decoded.str();
-}
-
 inline void lightSleep(gpio_num_t pin, int level, uint64_t time = 0){
-    debug("[SLEEP] Start light sleep\n");
     rtc_gpio_pullup_en(pin);
     esp_sleep_enable_ext0_wakeup(pin, level);
     if(time > 0){
@@ -97,7 +68,6 @@ inline void lightSleep(gpio_num_t pin, int level, uint64_t time = 0){
 }
 
 inline void deepSleep(gpio_num_t pin, int level, uint64_t time = 0){
-    debug("[SLEEP] Start deep sleep\n");
     rtc_gpio_pullup_en(pin);
     esp_sleep_enable_ext0_wakeup(pin, level);
     if(time > 0){

@@ -29,7 +29,7 @@ namespace door{
             .open = open,
             .updateTime = (uint32_t) current,
         });
-        debug(open ? "[Door] 문 열림 (queue size: %d)\n" : "[Door] 문 닫힘 (queue size: %d)\n", queue.size());
+        printf(open ? "[Door] 문 열림 (queue size: %d)\n" : "[Door] 문 닫힘 (queue size: %d)\n", queue.size());
         return true;
     }
 

@@ -16,23 +16,23 @@ namespace wifi{
         static int64_t start = -1;
         if(id == IP_EVENT_STA_GOT_IP){
             connect = true;
-            debug("[WiFi] 아이피: " IPSTR ", time: %lldms\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip), millis() - start);
+            printf("[WiFi] 아이피: " IPSTR ", time: %lldms\n", IP2STR(&((ip_event_got_ip_t*) data)->ip_info.ip), millis() - start);
         }else{
             switch(id){
                 case WIFI_EVENT_STA_START:
-                    debug("[WiFi] Start WiFi\n");
+                    printf("[WiFi] Start WiFi\n");
                     start = millis();
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_STA_DISCONNECTED:
                     if(connect){
-                        debug("[WiFi] Disconnected WiFi\n");
+                        printf("[WiFi] Disconnected WiFi\n");
                     }
                     connect = false;
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_AP_START:
-                    debug("[WiFi] Start AP\n");
+                    printf("[WiFi] Start AP\n");
                     break;
             }
         }

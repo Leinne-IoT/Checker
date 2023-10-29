@@ -80,7 +80,6 @@ static void webSocketHandler(void* object, esp_event_base_t base, int32_t eventI
         lastUpdateTime = millis();
         switch(data->data_ptr[0]){
             case 0x10: // LED LIGHT
-                debug("[WS] LED 점등\n");
                 gpio_set_level(LED_BUILTIN, data->data_ptr[1]);
                 break;
             case 0x20: // 피에조 부저
@@ -141,10 +140,7 @@ static void networkLoop(void* args){
 extern "C" void app_main(){
     gpio_pullup_en(SWITCH_PIN);
     gpio_set_direction(SWITCH_PIN, GPIO_MODE_INPUT);
-
-    auto cause = esp_sleep_get_wakeup_cause();
-    debug("[Main] Wake Up Cause: %d\n", cause);
-    door::init(cause == ESP_SLEEP_WAKEUP_EXT0);
+    door::init(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0);
 
     gpio_pullup_en(RESET_PIN);
     gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);

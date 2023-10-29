@@ -103,6 +103,28 @@ R"rawliteral(
 
 namespace web{
     httpd_handle_t server = NULL;
+
+    static string urlDecode(const string& encoded){
+        ostringstream decoded;
+        for(size_t i = 0; i < encoded.length(); ++i){
+            if(encoded[i] == '%'){
+                if(i + 2 < encoded.length()){
+                    int decoded_char;
+                    char hexStr[3] = {encoded[i + 1], encoded[i + 2], '\0'};
+                    istringstream(hexStr) >> hex >> decoded_char;
+                    decoded << static_cast<char>(decoded_char);
+                    i += 2;
+                }else{
+                    return "";
+                }
+            }else if(encoded[i] == '+'){
+                decoded << ' ';
+            }else{
+                decoded << encoded[i];
+            }
+        }
+        return decoded.str();
+    }
     
     static tuple<string, string, string> parseParameter(char* data){
         string token;
@@ -189,7 +211,7 @@ namespace web{
             return ESP_OK;
         }
 
-        debug("[Web] Start Server\n");
+        printf("[Web] Start Server\n");
         httpd_config_t config = HTTPD_DEFAULT_CONFIG();
         config.stack_size = 8192;
 
@@ -220,7 +242,7 @@ namespace web{
             return false;
         }
 
-        debug("[Web] Stop Server\n");
+        printf("[Web] Stop Server\n");
         httpd_stop(server);
         server = NULL;
         return true;
