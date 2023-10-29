@@ -14,7 +14,7 @@
 #ifdef DEBUG_MODE
 #define DEEP_SLEEP_DELAY 0xFFFFFFFF
 #else
-#define DEEP_SLEEP_DELAY 15000
+#define DEEP_SLEEP_DELAY 10000
 #endif
 
 #define DEFAULT_WEBSOCKET_URL "ws://leinne.net:33877/"
