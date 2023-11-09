@@ -6,7 +6,7 @@
 using namespace std;
 
 namespace storage{
-    static string devicdId = "";
+    static string deviceId = "";
     static nvs_handle_t nvsHandle;
 
     esp_err_t begin(){
@@ -45,13 +45,13 @@ namespace storage{
     }
 
     string getDeviceId(){
-        if(devicdId.length() == 6){
-            return devicdId;
+        if(deviceId.length() > 0){
+            return deviceId;
         }
 
         string id = getString("DEVICE_ID", 11);
         if(id.length() == 10){
-            return devicdId = id;
+            return deviceId = id;
         }else{
             stringstream stream;
             for(uint8_t i = 0; i < 5; ++i){
@@ -61,8 +61,8 @@ namespace storage{
             for(uint8_t i = 0; i < 4; ++i){
                 stream << (char) random('0', '9');
             }
-            setString("DEVICE_ID", devicdId = stream.str(), false);
+            setString("DEVICE_ID", deviceId = stream.str(), false);
         }
-        return devicdId;
+        return deviceId;
     }
 }
