@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <nvs_flash.h>
@@ -8,6 +9,7 @@
 #include <esp_http_client.h>
 #include <atomic>
 #include <string>
+#include <iostream>
 
 //#define DEBUG_MODE
 
@@ -20,17 +22,17 @@
 #define DEFAULT_WEBSOCKET_URL "ws://leinne.net:33877/"
 
 #ifdef CONFIG_IDF_TARGET_ESP32
+#define LED_PIN GPIO_NUM_2
 #define RESET_PIN GPIO_NUM_26
 #define SWITCH_PIN GPIO_NUM_25
 #define BUZZER_PIN GPIO_NUM_27
 #define BATTERY_PIN GPIO_NUM_0
-#define LED_BUILTIN GPIO_NUM_2
 #else
+#define LED_PIN GPIO_NUM_5
 #define RESET_PIN GPIO_NUM_8
 #define SWITCH_PIN GPIO_NUM_7
 #define BUZZER_PIN GPIO_NUM_9
 #define BATTERY_PIN GPIO_NUM_0
-#define LED_BUILTIN GPIO_NUM_5
 #endif
 
 #include "web.h"
@@ -80,7 +82,7 @@ static void webSocketHandler(void* object, esp_event_base_t base, int32_t eventI
         lastUpdateTime = millis();
         switch(data->data_ptr[0]){
             case 0x10: // LED LIGHT
-                gpio_set_level(LED_BUILTIN, data->data_ptr[1]);
+                gpio_set_level(LED_PIN, data->data_ptr[1]);
                 break;
             case 0x20: // 피에조 부저
                 //ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, );
@@ -140,29 +142,29 @@ static void networkLoop(void* args){
 extern "C" void app_main(){
     gpio_pullup_en(SWITCH_PIN);
     gpio_set_direction(SWITCH_PIN, GPIO_MODE_INPUT);
-    door::init(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0);
+    door::init(esp_sleep_get_wakeup_cause());
 
     gpio_pullup_en(RESET_PIN);
     gpio_set_direction(RESET_PIN, GPIO_MODE_INPUT);
-    gpio_set_direction(LED_BUILTIN, GPIO_MODE_OUTPUT);
+    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
 
     ledc_timer_config_t ledc_timer = {
-        .speed_mode       = LEDC_LOW_SPEED_MODE,
-        .duty_resolution  = LEDC_TIMER_13_BIT,
-        .timer_num        = LEDC_TIMER_0,
-        .freq_hz          = 600,
-        .clk_cfg          = LEDC_AUTO_CLK
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .duty_resolution = LEDC_TIMER_13_BIT,
+        .timer_num = LEDC_TIMER_0,
+        .freq_hz = 600,
+        .clk_cfg = LEDC_AUTO_CLK
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
     ledc_channel_config_t ledc_channel = {
-        .gpio_num       = BUZZER_PIN,
-        .speed_mode     = LEDC_LOW_SPEED_MODE,
-        .channel        = LEDC_CHANNEL_0,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .timer_sel      = LEDC_TIMER_0,
-        .duty           = 0,
-        .hpoint         = 0
+        .gpio_num = BUZZER_PIN,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_0,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = LEDC_TIMER_0,
+        .duty = 0,
+        .hpoint = 0
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 

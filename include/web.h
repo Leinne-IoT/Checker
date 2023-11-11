@@ -211,7 +211,7 @@ namespace web{
             return ESP_OK;
         }
 
-        printf("[Web] Start Server\n");
+        std::cout << "[Web] Start Server\n";
         httpd_config_t config = HTTPD_DEFAULT_CONFIG();
         config.stack_size = 8192;
 
@@ -242,7 +242,7 @@ namespace web{
             return false;
         }
 
-        printf("[Web] Stop Server\n");
+        std::cout << "[Web] Stop Server\n";
         httpd_stop(server);
         server = NULL;
         return true;

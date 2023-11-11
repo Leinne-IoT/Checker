@@ -25,19 +25,22 @@ namespace ws{
 
     void sendWelcome(){
         auto device = storage::getDeviceId();
-        uint8_t buffer[16] = {0x01, 0x01, getBatteryLevel()}; //{device type, data type, battery level}
-        for(uint8_t i = 0; i< device.length(); ++i){
+        uint8_t buffer[device.length() + 3] = {0x01, 0x01, getBatteryLevel()}; //{device type, data type, battery level}
+        for(uint8_t i = 0; i < device.length(); ++i){
             buffer[3 + i] = device[i];
         }
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, device.length() + 3, portMAX_DELAY);
-        printf("[WS] Send welcome message\n");
+        std::cout << "[WS] Send welcome message\n";
     }
 
     void sendDoorState(DoorState state){
         sendPhase = true;
-        printf("[WS] Start send(%s).\n", state.open ? "open" : "close");
-        uint8_t buffer[7] = {0x01, 0x02, getBatteryLevel()}; //{device type, data type, open:1 battery level:7}
-        buffer[2] = state.open ? buffer[2] | 0b10000000 : buffer[2] & 0b01111111;
+        uint8_t buffer[7] = {
+            0x01, // device type
+            0x02, // data type
+            (uint8_t) ((state.open << 4) | (getBatteryLevel() & 0b1111))
+        };
+        buffer[2] |= state.open << 4;
         uint8_t count = 0;
         int64_t delay = 0;
         do{
@@ -46,7 +49,6 @@ namespace ws{
             }
 
             if(++count > 3){
-                printf("[WS] Send failed.\n");
                 return;
             }
             delay = millis();
@@ -56,6 +58,12 @@ namespace ws{
             }
             esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 7, portMAX_DELAY);
         }while(sendPhase);
+
+        if(count <= 3){
+            std::cout << "[WS] Send successful. (state: " << (state.open ? "open" : "close") << ")\n";
+        }else{
+            std::cout << "[WS] Send failed.\n";
+        }
     }
 
     bool isConnected(){
@@ -68,7 +76,7 @@ namespace ws{
             sendWelcome();
         }else if(eventId == WEBSOCKET_EVENT_DISCONNECTED || eventId == WEBSOCKET_EVENT_ERROR){
             if(connectServer){
-                printf("[WS] Disconnected WebSocket\n");
+                std::cout << "[WS] Disconnected WebSocket\n";
             }
             connectServer = false;
         }else if(eventId == WEBSOCKET_EVENT_DATA){
@@ -76,9 +84,9 @@ namespace ws{
                 string device(data->data_ptr, data->data_len);
                 if(storage::getDeviceId() == device){
                     connectServer = true;
-                    printf("[WS] Connect successful.\n");
+                    std::cout << "[WS] Connect successful.\n";
                 }else{
-                    printf("[WS] FAILED. device: %s, receive: %s, len: %d\n", storage::getDeviceId().c_str(), device.c_str(), data->data_len);
+                    std::cout << "[WS] FAILED. device: " << storage::getDeviceId() << ", receive: " << device << ", len: " << data->data_len << "\n";
                 }
             }else if(data->op_code == BINARY){
                 sendPhase = false;

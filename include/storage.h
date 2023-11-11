@@ -10,18 +10,13 @@ namespace storage{
     static nvs_handle_t nvsHandle;
 
     esp_err_t begin(){
-        esp_err_t res = nvs_open("checker", NVS_READWRITE, &nvsHandle);
-        if(res != ESP_OK){
-            //log_e("Unable to open NVS namespace: %d", res);
-        }
-        return res;
+        return nvs_open("checker", NVS_READWRITE, &nvsHandle);
     }
 
     string getString(string key, size_t length){
         char data[length] = {0};
         esp_err_t err = nvs_get_str(nvsHandle, key.c_str(), data, &length);
         if(err != ESP_OK){
-            //log_e("Failed to load data '%s'. length: %d, error code: %s", key.c_str(), lenData, esp_err_to_name(err));
             return "";
         }
         return string(data);
@@ -31,7 +26,6 @@ namespace storage{
         uint16_t lenData;
         esp_err_t err = nvs_get_u16(nvsHandle, (key + "$l").c_str(), &lenData);
         if(err != ESP_OK){
-            //log_e("Failed to load data '%s$l'. length: %d, error code: %s", key.c_str(), lenData, esp_err_to_name(err));
             return "";
         }
         return getString(key, lenData);
@@ -55,11 +49,11 @@ namespace storage{
         }else{
             stringstream stream;
             for(uint8_t i = 0; i < 5; ++i){
-                stream << (char) random('a', 'z');
+                stream << (char) random_int('a', 'z');
             }
             stream << '_';
             for(uint8_t i = 0; i < 4; ++i){
-                stream << (char) random('0', '9');
+                stream << (char) random_int('0', '9');
             }
             setString("DEVICE_ID", deviceId = stream.str(), false);
         }

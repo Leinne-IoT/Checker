@@ -20,19 +20,19 @@ namespace wifi{
         }else{
             switch(id){
                 case WIFI_EVENT_STA_START:
-                    printf("[WiFi] Start WiFi\n");
+                    std::cout << "[WiFi] Start WiFi\n";
                     start = millis();
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_STA_DISCONNECTED:
                     if(connect){
-                        printf("[WiFi] Disconnected WiFi\n");
+                        std::cout << "[WiFi] Disconnected WiFi\n";
                     }
                     connect = false;
                     esp_wifi_connect();
                     break;
                 case WIFI_EVENT_AP_START:
-                    printf("[WiFi] Start AP\n");
+                    std::cout << "[WiFi] Start AP\n";
                     break;
             }
         }

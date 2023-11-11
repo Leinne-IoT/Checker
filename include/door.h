@@ -29,7 +29,7 @@ namespace door{
             .open = open,
             .updateTime = (uint32_t) current,
         });
-        printf(open ? "[Door] 문 열림 (queue size: %d)\n" : "[Door] 문 닫힘 (queue size: %d)\n", queue.size());
+        std::cout << "[Door] 문 " << (open ? "열림" : "닫힘") << " (size: " << queue.size() << ")\n";
         return true;
     }
 
@@ -37,8 +37,8 @@ namespace door{
         return update(state());
     }
 
-    inline void init(bool sleep = false){
-        if(sleep){
+    inline void init(esp_sleep_wakeup_cause_t cause){
+        if(cause > ESP_SLEEP_WAKEUP_ALL){
             update(!lastState);
         }else{
             lastState = state();
