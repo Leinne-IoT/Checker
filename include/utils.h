@@ -27,16 +27,6 @@ inline uint32_t random_int(uint32_t min, uint32_t max){
     return random_int(max - min) + min;
 }
 
-inline uint8_t getBatteryLevel(){
-    uint32_t sum = 0;
-    for(uint8_t i = 0; i < 16; ++i){
-        sum += analogReadMilliVolts(GPIO_NUM_1);
-    }
-    uint8_t calculate = (sum * 2.038 / 16 - 3400) / (4200 - 3400) * 10;
-    cout << "[battery] " << (calculate * 10) << "%\n";
-    return MIN(10, MAX(1, calculate));
-}
-
 inline int64_t getCurrentMillis(){
     timeval now;
     gettimeofday(&now, NULL);

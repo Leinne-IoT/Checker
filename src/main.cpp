@@ -19,8 +19,6 @@
 #define DEEP_SLEEP_DELAY 10000
 #endif
 
-#define DEFAULT_WEBSOCKET_URL "ws://leinne.net:33877/"
-
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define LED_PIN GPIO_NUM_2
 #define RESET_PIN GPIO_NUM_26
@@ -40,6 +38,7 @@
 #include "wifi.h"
 #include "utils.h"
 #include "storage.h"
+#include "battery.h"
 #include "websocket.h"
 #include "safe_queue.h"
 
@@ -169,8 +168,11 @@ extern "C" void app_main(){
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
     TaskHandle_t gpioTask;
-    TaskHandle_t networkTask;
+    TaskHandle_t batteryTask;
     xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &gpioTask, 1);
+    xTaskCreatePinnedToCore(battery::calculate, "battery", 10000, NULL, 1, &batteryTask, 1);
+
+    TaskHandle_t networkTask;
     xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 0);
 
     for(;;){

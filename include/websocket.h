@@ -8,6 +8,9 @@
 #include "door.h"
 #include "utils.h"
 #include "storage.h"
+#include "battery.h"
+
+#define DEFAULT_WEBSOCKET_URL "ws://leinne.net:33877/ws"
 
 typedef enum{
     CONTINUITY,
@@ -25,7 +28,7 @@ namespace ws{
 
     void sendWelcome(){
         auto device = storage::getDeviceId();
-        uint8_t buffer[device.length() + 3] = {0x01, 0x01, getBatteryLevel()}; //{device type, data type, battery level}
+        uint8_t buffer[device.length() + 3] = {0x01, 0x01, battery::level}; //{device type, data type, battery level}
         for(uint8_t i = 0; i < device.length(); ++i){
             buffer[3 + i] = device[i];
         }
@@ -36,9 +39,9 @@ namespace ws{
     void sendDoorState(DoorState state){
         sendPhase = true;
         uint8_t buffer[7] = {
-            0x01, // device type
-            0x02, // data type
-            (uint8_t) ((state.open << 4) | (getBatteryLevel() & 0b1111))
+            0x01, // device type(0x01: checker, 0x02: switch bot)
+            0x02, // data type (0x01: welcome 0x02: success)
+            (uint8_t) ((state.open << 4) | (battery::level & 0b1111))
         };
         buffer[2] |= state.open << 4;
         uint8_t count = 0;
@@ -102,7 +105,8 @@ namespace ws{
 
         esp_websocket_client_config_t websocket_cfg = {
             .uri = url.c_str(),
-            .reconnect_timeout_ms = 250,
+            .keep_alive_enable = true,
+            .reconnect_timeout_ms = 1000,
         };
 
         while(webSocket == NULL){
