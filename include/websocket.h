@@ -28,7 +28,11 @@ namespace ws{
 
     void sendWelcome(){
         auto device = storage::getDeviceId();
-        uint8_t buffer[device.length() + 3] = {0x01, 0x01, battery::level}; //{device type, data type, battery level}
+        uint8_t buffer[device.length() + 3] = {
+            0x01, // protocol type (0x01: welcome, 0x02: door state, 0x03: switch state)
+            0x01, // [data] device type((0x01: checker, 0x02: switch bot)
+            battery::level // [data] battery
+        };
         for(uint8_t i = 0; i < device.length(); ++i){
             buffer[3 + i] = device[i];
         }
@@ -39,9 +43,8 @@ namespace ws{
     void sendDoorState(DoorState state){
         sendPhase = true;
         uint8_t buffer[7] = {
-            0x01, // device type(0x01: checker, 0x02: switch bot)
-            0x02, // data type (0x01: welcome 0x02: success)
-            (uint8_t) ((state.open << 4) | (battery::level & 0b1111))
+            0x02, // protocol type (0x01: welcome, 0x02: door state, 0x03: switch state)
+            (uint8_t) ((state.open << 4) | (battery::level & 0b1111)) // [data] state | battery
         };
         buffer[2] |= state.open << 4;
         uint8_t count = 0;
