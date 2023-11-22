@@ -142,7 +142,7 @@ namespace web{
             if(key == "password"){
                 get<1>(result) = urlDecode(token.substr(equalPos + 1));
             }
-            if(key == "sever_url"){
+            if(key == "server_url"){
                 get<2>(result) = urlDecode(token.substr(equalPos + 1));
             }
         }
