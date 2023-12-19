@@ -55,7 +55,7 @@ R"rawliteral(
             </tr>
             <tr>
                 <td>Custom WebSocket URL</td>
-                <td><input type="test" name="server_url"></td>
+                <td><input type="text" name="server_url"></td>
             </tr>
             <tr>
                 <td colspan='2'><center><input style="width: 50%; font-weight: bold" type="submit" value="Submit"></center></td>
