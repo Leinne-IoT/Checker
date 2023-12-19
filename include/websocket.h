@@ -22,7 +22,6 @@ typedef enum{
 } websocket_opcode_t;
 
 namespace ws{
-    atomic<bool> sendPhase = false;
     atomic<bool> connectServer = false;
     esp_websocket_client_handle_t webSocket = NULL;
 
@@ -41,35 +40,15 @@ namespace ws{
     }
 
     void sendDoorState(DoorState state){
-        sendPhase = true;
         uint8_t buffer[7] = {
             0x02, // protocol type (0x01: welcome, 0x02: door state, 0x03: switch state)
             (uint8_t) ((state.open << 4) | (battery::level & 0b1111)) // [data] state | battery
         };
-        buffer[2] |= state.open << 4;
-        uint8_t count = 0;
-        int64_t delay = 0;
-        do{
-            if(millis() - delay < 1000){
-                continue;
-            }
-
-            if(++count > 3){
-                return;
-            }
-            delay = millis();
-            int64_t current = millis() - state.updateTime;
-            for(uint8_t byte = 0; byte < 4; ++byte){
-                buffer[3 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
-            }
-            esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 7, portMAX_DELAY);
-        }while(sendPhase);
-
-        if(count <= 3){
-            std::cout << "[WS] Send successful. (state: " << (state.open ? "open" : "close") << ")\n";
-        }else{
-            std::cout << "[WS] Send failed.\n";
+        int64_t current = millis() - state.updateTime;
+        for(uint8_t byte = 0; byte < 4; ++byte){
+            buffer[2 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
         }
+        esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
     }
 
     bool isConnected(){
@@ -112,8 +91,6 @@ namespace ws{
                 }else{
                     std::cout << "[WS] FAILED. device: " << storage::getDeviceId() << ", receive: " << device << ", len: " << data->data_len << "\n";
                 }
-            }else if(data->op_code == BINARY){
-                sendPhase = false;
             }
         }
     }
