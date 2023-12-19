@@ -10,7 +10,7 @@
 #include "storage.h"
 #include "battery.h"
 
-#define DEFAULT_WEBSOCKET_URL "ws://leinne.net:33877/ws"
+#define WEBSOCKET_URL "ws://localhost:8080/iot" // ws 주소 작성
 
 typedef enum{
     CONTINUITY,
@@ -28,25 +28,25 @@ namespace ws{
     void sendWelcome(){
         auto device = storage::getDeviceId();
         uint8_t buffer[device.length() + 3] = {
-            0x01, // protocol type (0x01: welcome, 0x02: door state, 0x03: switch state)
-            0x01, // [data] device type((0x01: checker, 0x02: switch bot)
-            battery::level // [data] battery
+            0x01,          // protocol type (0x01: welcome)
+            0x01,          // device type(0x01: checker)
+            battery::level // battery
         };
         for(uint8_t i = 0; i < device.length(); ++i){
             buffer[3 + i] = device[i];
         }
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, device.length() + 3, portMAX_DELAY);
-        std::cout << "[WS] Send welcome message\n";
+        std::cout << "[Socket] 환영 메시지를 전송했습니다.\n";
     }
 
     void sendDoorState(DoorState state){
         uint8_t buffer[7] = {
-            0x02, // protocol type (0x01: welcome, 0x02: door state, 0x03: switch state)
-            (uint8_t) ((state.open << 4) | (battery::level & 0b1111)) // [data] state | battery
+            0x02,                                                     // protocol type (0x02: door state)
+            (uint8_t) ((state.open << 4) | (battery::level & 0b1111)) // door_state << 4 | battery
         };
         int64_t current = millis() - state.updateTime;
         for(uint8_t byte = 0; byte < 4; ++byte){
-            buffer[2 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
+            buffer[2 + byte] = (current >> 8 * (2 - byte)) & 0b11111111;
         }
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
     }
@@ -87,28 +87,23 @@ namespace ws{
                 string device(data->data_ptr, data->data_len);
                 if(storage::getDeviceId() == device){
                     connectServer = true;
-                    std::cout << "[WS] Connect successful.\n";
+                    std::cout << "[Socket] 서버와 연결되었습니다.\n";
                 }else{
-                    std::cout << "[WS] FAILED. device: " << storage::getDeviceId() << ", receive: " << device << ", len: " << data->data_len << "\n";
+                    std::cout << "[Socket] 서버 연결 실패. 기기명 불일치 [device: " << storage::getDeviceId() << ", receive: " << device << ", len: " << data->data_len << "]\n";
                 }
             }
         }
     }
 
     void start(esp_event_handler_t handler){
-        auto url = storage::getString("websocket_url");
-        if(url.find_first_of("ws") == string::npos){
-            storage::setString("websocket_url", url = DEFAULT_WEBSOCKET_URL);
-        }
-
-        esp_websocket_client_config_t websocket_cfg = {
-            .uri = url.c_str(),
+        esp_websocket_client_config_t socketConfig = {
+            .uri = WEBSOCKET_URL,
             .keep_alive_enable = true,
             .reconnect_timeout_ms = 1000,
         };
 
         while(webSocket == NULL){
-            webSocket = esp_websocket_client_init(&websocket_cfg);
+            webSocket = esp_websocket_client_init(&socketConfig);
         }
         esp_websocket_register_events(webSocket, WEBSOCKET_EVENT_ANY, handler, NULL);
         esp_websocket_register_events(webSocket, WEBSOCKET_EVENT_ANY, eventHandler, NULL);

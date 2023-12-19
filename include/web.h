@@ -1,6 +1,5 @@
 #pragma once
 
-#include <tuple>
 #include <string>
 #include <utility>
 #include <sstream>
@@ -20,7 +19,7 @@ R"rawliteral(
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Checker WiFi Settings</title>
+    <title>Iot Device WiFi Settings</title>
     <style>
         tr > td > input{
             padding: 0;
@@ -42,7 +41,7 @@ R"rawliteral(
     </style>
 </head>
 <body>
-    <h1><center>Checker WiFi Settings</center></h1>
+    <h1><center>Iot Device WiFi Settings</center></h1>
     <form method="POST" action="save">
         <table>
             <tr>
@@ -52,10 +51,6 @@ R"rawliteral(
             <tr>
                 <td>Password</td>
                 <td><input type="password" required minlength="8" maxlength="100" name="password"></td>
-            </tr>
-            <tr>
-                <td>Custom WebSocket URL</td>
-                <td><input type="text" name="server_url"></td>
             </tr>
             <tr>
                 <td colspan='2'><center><input style="width: 50%; font-weight: bold" type="submit" value="Submit"></center></td>
@@ -73,12 +68,12 @@ R"rawliteral(
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Checker WiFi Settings</title>
+    <title>Iot Device WiFi Settings</title>
 </head>
 <body>
     <center>
-        <h1>Checker WiFi Settings</h1>
-        <div>Checker WiFi AP settings have been successful.</div>
+        <h1>Iot Device WiFi Settings</h1>
+        <div>SSID and password have been registered.</div>
     </center>
 </body>
 </html>
@@ -91,7 +86,7 @@ R"rawliteral(
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Checker WiFi Settings</title>
+    <title>Iot Device WiFi Settings</title>
 </head>
 <body>
     <center>
@@ -126,10 +121,10 @@ namespace web{
         return decoded.str();
     }
     
-    static tuple<string, string, string> parseParameter(char* data){
+    static pair<string, string> parseParameter(char* data){
         string token;
         istringstream iss(data);
-        tuple<string, string, string> result("", "", "");
+        pair<string, string> result("", "");
         while(getline(iss, token, '&')){
             size_t equalPos = token.find('=');
             if(equalPos == string::npos){
@@ -137,13 +132,9 @@ namespace web{
             }
             auto key = token.substr(0, equalPos);
             if(key == "ssid"){
-                get<0>(result) = urlDecode(token.substr(equalPos + 1));
-            }
-            if(key == "password"){
-                get<1>(result) = urlDecode(token.substr(equalPos + 1));
-            }
-            if(key == "server_url"){
-                get<2>(result) = urlDecode(token.substr(equalPos + 1));
+                result.first = urlDecode(token.substr(equalPos + 1));
+            }else if(key == "password"){
+                result.second = urlDecode(token.substr(equalPos + 1));
             }
         }
         return result;
@@ -183,16 +174,12 @@ namespace web{
         char content[req->content_len + 1] = {0};
         int ret = httpd_req_recv(req, content, req->content_len);
         if(ret > 0){
-            string ssid, password, url;
-            tie(ssid, password, url) = parseParameter(content);
-            if(ssid.length() > 0 && password.length() > 7){
+            auto result = parseParameter(content);
+            if(result.first.length() > 0 && result.second.length() > 7){
                 httpd_resp_send(req, saveHtml, HTTPD_RESP_USE_STRLEN);
-                vTaskDelay(1000 / portTICK_PERIOD_MS);
+                vTaskDelay(1500 / portTICK_PERIOD_MS);
 
-                wifi::setData(ssid, password);
-                if(url.find_first_of("ws") != string::npos){
-                    storage::setString("websocket_url", url);
-                }
+                wifi::setData(result.first, result.second);
                 esp_restart();
             }else{
                 httpd_resp_send(req, saveHtmlError, HTTPD_RESP_USE_STRLEN);
