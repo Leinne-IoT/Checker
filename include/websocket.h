@@ -28,9 +28,9 @@ namespace ws{
     void sendWelcome(){
         auto device = storage::getDeviceId();
         uint8_t buffer[device.length() + 3] = {
-            0x01,          // protocol type (0x01: welcome)
-            0x01,          // device type(0x01: checker)
-            battery::level // battery
+            0x01,                                                        // protocol type (0x01: welcome)
+            0x01,                                                        // device type(0x01: checker)
+            (uint8_t) ((door::state() << 4) | (battery::level & 0b1111)) // door_state << 4 | battery
         };
         for(uint8_t i = 0; i < device.length(); ++i){
             buffer[3 + i] = device[i];
@@ -46,7 +46,7 @@ namespace ws{
         };
         int64_t current = millis() - state.updateTime;
         for(uint8_t byte = 0; byte < 4; ++byte){
-            buffer[2 + byte] = (current >> 8 * (2 - byte)) & 0b11111111;
+            buffer[2 + byte] = (current >> 8 * (3 - byte)) & 0b11111111;
         }
         esp_websocket_client_send_with_opcode(webSocket, WS_TRANSPORT_OPCODES_BINARY, buffer, 6, portMAX_DELAY);
     }
@@ -66,7 +66,6 @@ namespace ws{
             if(!wifi::connect){
                 return;
             }
-
             std::cout << "[Socket] esp_tls_stack_err: " << data->error_handle.esp_tls_stack_err << ", status: " << data->error_handle.esp_ws_handshake_status_code << ", socket: " << data->error_handle.esp_transport_sock_errno << "\n";
             switch(data->error_handle.error_type){
                 case WEBSOCKET_ERROR_TYPE_NONE:
