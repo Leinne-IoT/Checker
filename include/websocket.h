@@ -78,13 +78,31 @@ namespace ws{
 
     static void eventHandler(void* object, esp_event_base_t base, int32_t eventId, void* eventData){
         esp_websocket_event_data_t* data = (esp_websocket_event_data_t*) eventData;
-        if(eventId == WEBSOCKET_EVENT_CONNECTED){
-            sendWelcome();
-        }else if(eventId == WEBSOCKET_EVENT_DISCONNECTED || eventId == WEBSOCKET_EVENT_ERROR){
+        if(eventId == WEBSOCKET_EVENT_DISCONNECTED){
             if(connectServer){
                 std::cout << "[WS] Disconnected WebSocket\n";
             }
             connectServer = false;
+        }else if(eventId == WEBSOCKET_EVENT_ERROR){
+            if(!wifi::connect){
+                return;
+            }
+
+            std::cout << "[Socket] esp_tls_stack_err: " << data->error_handle.esp_tls_stack_err << ", status: " << data->error_handle.esp_ws_handshake_status_code << ", socket: " << data->error_handle.esp_transport_sock_errno << "\n";
+            switch(data->error_handle.error_type){
+                case WEBSOCKET_ERROR_TYPE_NONE:
+                    std::cout << "[Socket] 에러 발생, type: NONE\n";
+                    break;
+                case WEBSOCKET_ERROR_TYPE_TCP_TRANSPORT:
+                    std::cout << "[Socket] 에러 발생, type: TCP_TRANSPORT\n";
+                    break;
+                case WEBSOCKET_ERROR_TYPE_PONG_TIMEOUT:
+                    std::cout << "[Socket] 에러 발생, type: PONG_TIMEOUT\n";
+                    break;
+                case WEBSOCKET_ERROR_TYPE_HANDSHAKE:
+                    std::cout << "[Socket] 에러 발생, type: TYPE_HANDSHAKE\n";
+                    break;
+            }
         }else if(eventId == WEBSOCKET_EVENT_DATA){
             if(data->op_code == STRING && !connectServer){
                 string device(data->data_ptr, data->data_len);
