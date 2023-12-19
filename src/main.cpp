@@ -169,11 +169,10 @@ extern "C" void app_main(){
 
     TaskHandle_t gpioTask;
     TaskHandle_t batteryTask;
-    xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &gpioTask, 1);
-    xTaskCreatePinnedToCore(battery::calculate, "battery", 10000, NULL, 1, &batteryTask, 1);
-
     TaskHandle_t networkTask;
+    xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &gpioTask, 1);
     xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 0);
+    xTaskCreatePinnedToCore(battery::calculate, "battery", 10000, NULL, 1, &batteryTask, 1);
 
     for(;;){
         door::queue.waitPush();
