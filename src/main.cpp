@@ -24,7 +24,7 @@
 #define RESET_PIN GPIO_NUM_26
 #define SWITCH_PIN GPIO_NUM_25
 #define BUZZER_PIN GPIO_NUM_27
-#define BATTERY_PIN GPIO_NUM_0
+#define BATTERY_PIN GPIO_NUM_36
 #else
 #define LED_PIN GPIO_NUM_5
 #define RESET_PIN GPIO_NUM_8
@@ -167,12 +167,11 @@ extern "C" void app_main(){
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
-    TaskHandle_t gpioTask;
-    TaskHandle_t batteryTask;
-    TaskHandle_t networkTask;
-    xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &gpioTask, 1);
-    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &networkTask, 0);
-    xTaskCreatePinnedToCore(battery::calculate, "battery", 10000, NULL, 1, &batteryTask, 1);
+    uint8_t i = 0;
+    TaskHandle_t handles[3];
+    xTaskCreatePinnedToCore(checkGPIO, "gpio", 10000, NULL, 1, &handles[i++], 1);
+    xTaskCreatePinnedToCore(networkLoop, "network", 10000, NULL, 1, &handles[i++], 0);
+    xTaskCreatePinnedToCore(battery::calculate, "battery", 10000, NULL, 1, &handles[i++], 1);
 
     for(;;){
         door::queue.waitPush();
