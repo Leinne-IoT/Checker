@@ -30,7 +30,7 @@ namespace ws{
         uint8_t buffer[device.length() + 3] = {
             0x01,                                                        // protocol type (0x01: welcome)
             0x01,                                                        // device type(0x01: checker)
-            (uint8_t) ((door::state() << 4) | (battery::level & 0b1111)) // door_state << 4 | battery
+            (uint8_t) ((door::lastState << 4) | (battery::level & 0b1111)) // door_state << 4 | battery
         };
         for(uint8_t i = 0; i < device.length(); ++i){
             buffer[3 + i] = device[i];
