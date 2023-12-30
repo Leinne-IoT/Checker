@@ -24,7 +24,7 @@ namespace battery{
     }
 
     void calculate(void* args){
-        level = voltToLevel(analogReadMilliVolts(GPIO_NUM_1) * 2.038);
+        level = voltToLevel(analogReadMilliVolts(BATTERY_PIN) * 2.038);
 
         uint64_t sum = 0;
         uint16_t count = 0;
@@ -36,7 +36,7 @@ namespace battery{
             if(count < CHECK_COUNT){
                 ++count;
                 time = millis();
-                sum += analogReadMilliVolts(GPIO_NUM_1) * 2.038;
+                sum += analogReadMilliVolts(BATTERY_PIN) * 2.038;
                 if(count >= CHECK_COUNT){
                     level = voltToLevel(sum / count);
                 }

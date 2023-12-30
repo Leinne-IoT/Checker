@@ -24,13 +24,13 @@
 #define RESET_PIN GPIO_NUM_26
 #define SWITCH_PIN GPIO_NUM_25
 #define BUZZER_PIN GPIO_NUM_27
-#define BATTERY_PIN GPIO_NUM_36
+#define BATTERY_PIN GPIO_NUM_35
 #else
 #define LED_PIN GPIO_NUM_5
 #define RESET_PIN GPIO_NUM_8
 #define SWITCH_PIN GPIO_NUM_7
 #define BUZZER_PIN GPIO_NUM_9
-#define BATTERY_PIN GPIO_NUM_0
+#define BATTERY_PIN GPIO_NUM_1
 #endif
 
 #include "web.h"
