@@ -14,12 +14,12 @@ using namespace std;
 namespace battery{
     atomic<uint8_t> level = 0;
 
-    static uint8_t voltToLevel(uint16_t mVolt){
-        if(mVolt < 1000){ // 배터리 연결이 안되어있는 장치라고 판단
+    static uint8_t voltToLevel(uint16_t voltage){
+        if(voltage < 3000){ // 배터리 측정 기능이 없거나 DC 전원으로 동작하는 장치
             return 15;
         }
-        int16_t calculate = (mVolt - 3550) * 10 / (4150 - 3550);
-        cout << "[battery] raw volt: " << mVolt << ", value: " << (calculate * 10) << "%\n";
+        int16_t calculate = (voltage - 3300) * 10 / (4200 - 3300);
+        cout << "[battery] raw volt: " << voltage << ", value: " << (calculate * 10) << "%\n";
         return (uint8_t) MIN(10, MAX(0, calculate));
     }
 
