@@ -24,7 +24,7 @@ namespace battery{
     }
 
     void calculate(void* args){
-        level = voltToLevel(analogReadMilliVolts(BATTERY_PIN) * 2.038);
+        level = voltToLevel(analogReadMilliVolts(BATTERY_PIN) * 2.042);
 
         uint64_t sum = 0;
         uint16_t count = 0;
