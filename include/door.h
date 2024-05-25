@@ -9,27 +9,33 @@ struct DoorState{
 };
 
 namespace door{
+    int64_t checkDelay = -1;
     SafeQueue<DoorState> queue;
-
-    int64_t lastUpdate = 0;
-    RTC_DATA_ATTR bool lastState = false;
+    RTC_DATA_ATTR bool current = false;
 
     inline int state(){
         return gpio_get_level(SWITCH_PIN) != 0;
     }
 
-    inline bool update(bool open){
-        auto current = millis();
-        if(lastState == open || current - lastUpdate < 1000){
+    inline bool update(bool newValue){
+        if(current == newValue){
+            checkDelay = -1;
             return false;
         }
-        lastState = open;
-        lastUpdate = current;
+
+        auto time = millis();
+        if(checkDelay == -1){
+            checkDelay = time;
+        }
+        if(time - checkDelay < 800){
+            return false;
+        }
+        current = newValue;
         queue.push({
-            .open = open,
-            .updateTime = (uint32_t) current,
+            .open = newValue,
+            .updateTime = (uint32_t) time,
         });
-        std::cout << "[Door] 문 " << (open ? "열림" : "닫힘") << " (size: " << queue.size() << ")\n";
+        std::cout << "[Door] 문 " << (newValue ? "열림" : "닫힘") << " (size: " << queue.size() << ")\n";
         return true;
     }
 
@@ -39,9 +45,9 @@ namespace door{
 
     inline void init(esp_sleep_wakeup_cause_t cause){
         if(cause > ESP_SLEEP_WAKEUP_ALL){
-            update(!lastState);
+            update(!current);
         }else{
-            lastState = state();
+            current = state();
         }
     }
 }

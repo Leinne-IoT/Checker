@@ -68,7 +68,7 @@ static void checkGPIO(void* args){
         }
 
         if(ws::connectServer && door::queue.empty() && millis() - lastUpdateTime > DEEP_SLEEP_DELAY){
-            deepSleep(SWITCH_PIN, !door::lastState);
+            deepSleep(SWITCH_PIN, !door::current);
         }
     }
 }
